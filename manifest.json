@@ -6,7 +6,7 @@
   "author": "burmjohn",
   "license": "MIT",
   "homepage": "https://github.com/burmjohn/omadocked",
-  "description": "Native Omarchy dock with running apps, pins, folders, and custom launchers.",
+  "description": "Native Omarchy dock with running apps, pins, folders, and custom launchers on the displays you choose. Wave or zoom magnification, hover window fan, auto-hide, and Settings for size, outputs, and click-to-minimize. Early public preview — please report bugs and send pull requests at https://github.com/burmjohn/omadocked.",
   "kinds": ["overlay"],
   "keepLoaded": true,
   "entryPoints": { "overlay": "Dock.qml" },

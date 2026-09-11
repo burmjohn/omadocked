@@ -8,6 +8,14 @@ Plugin id: `burmjohn.omadocked`.
 
 ![Hover](docs/screenshots/dock-hover.png)
 
+## What it does
+
+Omadocked is a bottom shelf overlay for Hyprland and Omarchy. It shows pinned and running apps, optional folders, and custom launchers, plus a hover window fan with still previews. Settings cover icon size, transparency, magnification, auto-hide, and which outputs show the dock.
+
+Click-to-minimize can be off, the active window, or all windows of an app.
+
+Settings and pins are stored in `~/.config/omadocked/pins.json`.
+
 ## Features
 
 - Bottom shelf on the displays you choose
@@ -17,17 +25,6 @@ Plugin id: `burmjohn.omadocked`.
 - Settings for size, transparency, auto-hide, and outputs
 - Custom launchers: apps, commands, links, and folders
 - Click-to-minimize: active window, all windows, or off
-
-Settings and pins are stored in `~/.config/omadocked/pins.json`.
-
-## Requirements
-
-- [Omarchy](https://omarchy.org) with Quickshell
-- Hyprland
-- `python3` and `python-gobject` for desktop-entry launches
-- `xdg-terminal-exec` only if you use command-in-terminal items
-
-Version is `0.1.2` in [`manifest.json`](manifest.json). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -46,6 +43,24 @@ omarchy plugin disable burmjohn.omadocked
 
 Your `pins.json` is left in place until you delete it.
 
+## Feedback
+
+This is an early public preview. Bug reports, ideas, and pull requests are welcome.
+
+- [Open an issue](https://github.com/burmjohn/omadocked/issues)
+- [Open a pull request](https://github.com/burmjohn/omadocked/pulls)
+
+Please include Omarchy and Quickshell versions and steps to reproduce. Do not attach private window titles, notification text, or an unredacted `pins.json`.
+
+## Requirements
+
+- [Omarchy](https://omarchy.org) with Quickshell
+- Hyprland
+- `python3` and `python-gobject` for desktop-entry launches
+- `xdg-terminal-exec` only if you use command-in-terminal items
+
+Version is `0.1.2` in [`manifest.json`](manifest.json). See [CHANGELOG.md](CHANGELOG.md).
+
 ## Development
 
 ```sh
@@ -57,4 +72,4 @@ make lint
 
 ## License
 
-[MIT](LICENSE). Bugs and ideas: [issues](https://github.com/burmjohn/omadocked/issues).
+[MIT](LICENSE).
