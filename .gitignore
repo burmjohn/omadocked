@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.qmlc
+*.jsc
+*.qmlproject.user
+.build/
+.cache/
+evidence/
+packaging/host-support/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.mp4
+*.log
+.DS_Store

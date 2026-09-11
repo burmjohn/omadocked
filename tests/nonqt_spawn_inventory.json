@@ -1,0 +1,54 @@
+{
+  "tests/lua_compositor.py": [
+    "subprocess.run(['/usr/bin/lua', '-'], input=stub + code + output, text=True, capture_output=True, timeout=3, check=True)"
+  ],
+  "tests/relocation_recovery.py": [
+    "subprocess.run(['/usr/bin/python3', str(helper), str(fixture.journal)], input=''.join((json.dumps(x) + '\\n' for x in requests)), env=env, capture_output=True, text=True, timeout=10)",
+    "subprocess.run(['/usr/bin/python3', str(plugin / 'services/folder_scan.py')], input=json.dumps({'path': str(folder), 'generation': 1, 'token': 'relocated', 'timeoutMs': 1000}), env=env, cwd=hostroot, capture_output=True, text=True, timeout=5)",
+    "subprocess.run(['/usr/bin/python3', str(plugin / 'services/launch_app.py'), '--record', json.dumps({'enabled': False})], env=env, cwd=hostroot, capture_output=True, text=True, timeout=5)",
+    "subprocess.run(['omarchy', 'plugin', 'validate', str(plugin)], capture_output=True, text=True, timeout=10)"
+  ],
+  "tests/shared_host.py": [
+    "subprocess.run(['/usr/bin/python3', str(base / 'services/config_store.py'), str(config)], input='', capture_output=True, text=True, timeout=3)"
+  ],
+  "tests/test_app_launcher.py": [
+    "subprocess.run(['/usr/bin/python3', '-c', \"from gi.repository import GioUnix; import json; print(json.dumps(GioUnix.DesktopAppInfo.new('owned.desktop').list_actions()))\"], env=env, text=True, capture_output=True, timeout=3)",
+    "subprocess.run(command, env=env, text=True, capture_output=True, timeout=3)",
+    "subprocess.run(command, env=env, text=True, capture_output=True, timeout=3)",
+    "subprocess.run(command, env=env, text=True, capture_output=True, timeout=3)"
+  ],
+  "tests/test_astra_regressions.py": [
+    "subprocess.Popen([sys.executable, str(ROOT / 'services/config_store.py'), str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)"
+  ],
+  "tests/test_config_store.py": [
+    "subprocess.Popen([sys.executable, str(HELPER), str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)",
+    "subprocess.run([sys.executable, '-c', \"import os; print(' '.join(os.listdir('/proc/self/fd')))\"], capture_output=True, text=True, close_fds=False)",
+    "subprocess.run([sys.executable, str(HELPER), str(bad)], input='', capture_output=True, text=True)",
+    "subprocess.run([sys.executable, str(HELPER), str(public_path)], input='', capture_output=True, text=True)",
+    "subprocess.run([sys.executable, str(HELPER), str(self.path)], input='', capture_output=True, text=True)"
+  ],
+  "tests/test_folder_actions.py": [
+    "subprocess.Popen(['/usr/bin/python3', str(helper)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)",
+    "subprocess.run(['/usr/bin/python3', str(ROOT / 'services/launch_app.py'), '--record', json.dumps(value)], env=env, capture_output=True, text=True, timeout=4)"
+  ],
+  "tests/test_folder_lifetime.py": [
+    "subprocess.Popen([sys.executable, str(helper)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)"
+  ],
+  "tests/test_folder_scan.py": [
+    "subprocess.run([sys.executable, str(MODULE_PATH)], input=json.dumps(request), text=True, capture_output=True, timeout=3, check=False)"
+  ],
+  "tests/test_folder_service.py": [
+    "subprocess.run(['/usr/bin/python3', str(ROOT / 'services/folder_scan.py')], input=json.dumps({'path': str(self.folder), 'generation': 1, 'token': 'signed'}), capture_output=True, text=True, timeout=3)"
+  ],
+  "tests/test_parking_helper.py": [
+    "subprocess.Popen([sys.executable, str(HELPER), str(journal)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env)"
+  ],
+  "tests/test_recovery_cli.py": [
+    "subprocess.run(argv, env=env, capture_output=True, text=True, timeout=5)"
+  ],
+  "tests/test_remediation_contracts.py": [
+    "subprocess.Popen([sys.executable, str(ROOT / 'services/config_store.py'), str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)",
+    "subprocess.Popen([sys.executable, str(ROOT / 'services/parking_store.py'), str(path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=dict(os.environ, HYPRLAND_INSTANCE_SIGNATURE='fixture'))",
+    "subprocess.run(['/usr/bin/lua', '-'], input=stub + code + '; print(calls)', capture_output=True, text=True, timeout=3)"
+  ]
+}

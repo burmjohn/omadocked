@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "burmjohn.omadocked",
+  "name": "Omadocked",
+  "version": "0.1.0",
+  "author": "burmjohn",
+  "description": "Native dock with running apps, saved settings and custom launchers. Development preview.",
+  "kinds": ["overlay"],
+  "keepLoaded": true,
+  "entryPoints": { "overlay": "Dock.qml" }
+}

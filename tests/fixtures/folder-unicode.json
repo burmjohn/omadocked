@@ -1,0 +1,47 @@
+{
+  "request": {
+    "path": "/tmp/astra-folder-2i24tb4n",
+    "generation": 1,
+    "token": "audit"
+  },
+  "result": {
+    "version": 1,
+    "generation": 1,
+    "token": "audit",
+    "status": "ok",
+    "complete": true,
+    "inspected": 2,
+    "entries": [
+      {
+        "name": "\ue000",
+        "path": "/tmp/astra-folder-2i24tb4n/\ue000",
+        "type": "file",
+        "size": 0,
+        "mtimeNs": "1700000000000000000",
+        "relativeTime": "2 years ago",
+        "iconCategory": "document"
+      },
+      {
+        "name": "\ud800\udc00",
+        "path": "/tmp/astra-folder-2i24tb4n/\ud800\udc00",
+        "type": "file",
+        "size": 0,
+        "mtimeNs": "1700000000000000000",
+        "relativeTime": "2 years ago",
+        "iconCategory": "document"
+      }
+    ],
+    "receipt": {
+      "generation": 1,
+      "token": "audit",
+      "inspected": 2,
+      "complete": true
+    },
+    "total": 2,
+    "omitted": 0,
+    "rootIdentity": {
+      "device": "46",
+      "inode": "156520"
+    }
+  }
+}
