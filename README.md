@@ -6,6 +6,8 @@ Plugin id: `burmjohn.omadocked`.
 
 ![The dock](docs/screenshots/dock.png)
 
+![Hover](docs/screenshots/dock-hover.png)
+
 ## Features
 
 - Bottom shelf on the displays you choose
