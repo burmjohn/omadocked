@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 — 2026-09-11
+
+Parking session rollover, identity rebind, importer destination validation,
+folder trailing-slash rejection, fail-closed host privacy, and Settings layout
+fixes from the 0.1.1 QA report.
+
 ## 0.1.1 — 2026-09-11
 
 Marketplace packaging: MIT `license` in the manifest, root `preview.png`, install/remove docs, and README screenshots.

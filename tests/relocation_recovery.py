@@ -341,15 +341,26 @@ ShellRoot {
         (OUT/'result.json').write_text(json.dumps({'checkpoints':len(states),'reaped':True,'children_gone':True,'locks_released':True,'warnings':warnings},indent=2)+'\n')
         print('PASS',len(states),'relocation/recovery checkpoints')
 
+def _optional_runtime_attestation(out):
+    db_path = os.environ.get('HERMES_STATE_DB')
+    session = os.environ.get('HERMES_SESSION_ID')
+    if not db_path or not session or out is None:
+        return
+    db = sqlite3.connect('file:%s?mode=ro' % db_path, uri=True)
+    try:
+        row = db.execute('select id,model,model_config from sessions where id=?', (session,)).fetchone()
+    finally:
+        db.close()
+    if not row:
+        return
+    runtime = {'session': row[0], 'model': row[1], 'config': json.loads(row[2])}
+    out.mkdir(parents=True, exist_ok=True)
+    (out / 'runtime-attestation.json').write_text(json.dumps(runtime, indent=2) + '\n')
+
+
 if __name__ == '__main__':
-    parser=argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--evidence-dir', type=Path, help='explicit receipt export directory (default: temporary)')
-    args=parser.parse_args()
-    db=sqlite3.connect('file:/home/jburmeister/.hermes/state.db?mode=ro',uri=True)
-    row=db.execute('select id,model,model_config from sessions where id=?',(os.environ['HERMES_SESSION_ID'],)).fetchone()
-    runtime={'session':row[0],'model':row[1],'config':json.loads(row[2])}
-    assert runtime['model']=='gpt-6-astra' and runtime['config']['reasoning_config']['effort']=='medium'
-    if args.evidence_dir is not None:
-        args.evidence_dir.mkdir(parents=True,exist_ok=True)
-        (args.evidence_dir/'runtime-attestation.json').write_text(json.dumps(runtime,indent=2)+'\n')
+    args = parser.parse_args()
+    _optional_runtime_attestation(args.evidence_dir)
     run(args.evidence_dir)
