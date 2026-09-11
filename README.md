@@ -4,14 +4,19 @@ A native dock for [Omarchy](https://omarchy.org): running apps, pins, folders, a
 
 Plugin id: `burmjohn.omadocked`.
 
-## What it does
+![Omadocked](docs/screenshots/shelf.png)
 
-- Bottom shelf with wave or zoom magnification
-- Pins, running apps, and optional app names
-- Hover window fan and still previews
-- Settings for size, transparency, motion, auto-hide, and which outputs to use
-- Custom items: apps, commands, links, and folders
-- Click-to-minimize can be set to active window, all windows, or off
+## Features
+
+- Bottom shelf on the displays you choose
+- Wave or zoom magnification, or motion off
+- Pins, running apps, folders, and optional names
+- Hover window fan with still previews
+- Settings for size, transparency, auto-hide, and outputs
+- Custom launchers: apps, commands, links, and folders
+- Click-to-minimize: active window, all windows, or off
+
+![Settings](docs/screenshots/settings.png)
 
 Settings and pins are stored in `~/.config/omadocked/pins.json`.
 

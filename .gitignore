@@ -8,10 +8,6 @@ __pycache__/
 .cache/
 evidence/
 packaging/host-support/
-*.png
-*.jpg
-*.jpeg
-*.webp
-*.mp4
 *.log
 .DS_Store
+docs/screenshots/_*.png
