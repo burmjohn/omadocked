@@ -1,9 +1,0 @@
-{
-  "shell/shell.qml": "e810abd65a3e0709462a04fa23153d62c1651563829b7001e44a106d7d2cd7cf",
-  "shell/services/PluginShellApi.qml": "9ff66aa3ef882ae6229d4f137665ee8bea2e0b11c6b967671ac60b0fbb3f0f26",
-  "shell/services/AuthServiceStore.js": "1414f2b807cab286c07efbe50e986b8afd8f0c5a4b689b5daf482eab44edc5ce",
-  "shell/plugins/notifications/Service.qml": "0e8b65f834a4f2179b12eb9aec58e82498fc60f6d968397fb734bd3d34c24a97",
-  "shell/services/ExternalLockObserver.qml": "ba973eebfa896cf7ffa97105453fe28de7e35a1a722189eff7d012c4b774f2f9",
-  "shell/services/LockObserverPolicy.js": "094de7d933e0389a20cc9c802fdde5d7afca6183e891f75811708d963c379c9b",
-  "libexec/omarchy-lock-observer": "eccf3edc170dc6683fe46a45d2702d37fea8593cbe78c3c099cc881363f1f33d"
-}

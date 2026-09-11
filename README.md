@@ -18,8 +18,6 @@ Plugin id: `burmjohn.omadocked`.
 - Custom launchers: apps, commands, links, and folders
 - Click-to-minimize: active window, all windows, or off
 
-![Settings](docs/screenshots/settings.png)
-
 Settings and pins are stored in `~/.config/omadocked/pins.json`.
 
 ## Requirements
