@@ -4,7 +4,7 @@ A native dock for [Omarchy](https://omarchy.org): running apps, pins, folders, a
 
 Plugin id: `burmjohn.omadocked`.
 
-![Omadocked](docs/screenshots/shelf.png)
+![The dock](docs/screenshots/dock.png)
 
 ## Features
 
