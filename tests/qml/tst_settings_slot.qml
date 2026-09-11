@@ -67,7 +67,12 @@ TestCase {
         verify(!boxesOverlap(settingsIcon, overlap, d), "Settings icon vs Overlap hide");
         d.availableWidth = 360;
         verify(waitForRendering(d));
+        wait(30);
+        const attention = findChild(d, "attention-hints-setting");
+        verify(attention);
         verify(!boxesOverlap(names, settingsIcon, d));
         verify(!boxesOverlap(settingsIcon, overlap, d));
+        verify(!boxesOverlap(names, attention, d), "wrapped Show app names vs Attention");
+        verify(!boxesOverlap(settingsIcon, attention, d), "wrapped Settings icon vs Attention");
     }
 }

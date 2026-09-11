@@ -70,6 +70,7 @@ QtObject {
     property bool _parkingReady: false
     property bool _startupRecoveryRequired: false
     property var _parkedWindows: []
+    property var _parkedIdentities: ({})
     property var _lastParkingReceipt: ({})
     property int _parkingSerial: 0
     property var _parkingQueue: []
@@ -102,6 +103,11 @@ QtObject {
             root._parking.running = false;
             root._actionError = "Window parking helper startup failed; parking and recovery disabled";
         }
+    }
+    property Timer _parkingMetadataRetry: Timer {
+        interval: 80
+        repeat: false
+        onTriggered: root._retryParkingMetadata()
     }
     function _parkingMessage(line) {
         let message;
@@ -141,6 +147,7 @@ QtObject {
     function _parkingLost(status) {
         _parkingReady = false;
         _parkingDeadline.stop();
+        _parkingMetadataRetry.stop();
         const active = _parkingActive && (_parkingActive.original || _parkingActive);
         const queued = _parkingQueue.slice();
         _parkingQueue = [];
@@ -149,9 +156,56 @@ QtObject {
         queued.forEach(request => _finishParking(request, {ok:false, status:status}));
         if (active && active.publicId > 0) _finishParking(active, {ok:false, status:status});
     }
+    function _rebindLiveKeys() {
+        const used = [];
+        _windows = _windows.map(w => {
+            let identity = w.identity || null;
+            if (!testMode && _live.item && w.handle) {
+                try { identity = _live.item.parkingIdentity(w.handle); } catch (_) { identity = null; }
+            }
+            const key = _assignWindowKey(w.key, identity, used);
+            used.push(key);
+            return Object.assign({}, w, {key: key});
+        });
+    }
+    function _assignWindowKey(previousKey, identity, used) {
+        if (previousKey && used.indexOf(previousKey) === -1 && identity
+            && _parkedIdentities[previousKey] && _identitiesMatch(_parkedIdentities[previousKey], identity))
+            return previousKey;
+        const rebound = _rebindParkedKey(identity, used);
+        if (rebound) return rebound;
+        if (previousKey && used.indexOf(previousKey) === -1) return previousKey;
+        return _windowSession + String(++_serial);
+    }
     function _applyParkingStatus(message) {
-        _parkedWindows = Array.isArray(message.records) ? message.records.map(r => ({key:String(r.key), state:String(r.state), sequence:Number(r.sequence)})) : [];
+        const identities = Object.create(null);
+        _parkedWindows = Array.isArray(message.records) ? message.records.map(r => {
+            const key = String(r.key);
+            if (r.identity && typeof r.identity === "object") identities[key] = r.identity;
+            return {key:key, state:String(r.state), sequence:Number(r.sequence)};
+        }) : [];
+        _parkedIdentities = identities;
         _startupRecoveryRequired = message.recoveryRequired === true;
+        _rebindLiveKeys();
+        _schedule();
+    }
+    function _identitiesMatch(a, b) {
+        if (!a || !b) return false;
+        if (a.address !== b.address || a.pid !== b.pid || a.class !== b.class
+            || a.initialClass !== b.initialClass || a.xwayland !== b.xwayland) return false;
+        if (typeof a.stableId === "string" && typeof b.stableId === "string" && a.stableId !== b.stableId)
+            return false;
+        return true;
+    }
+    function _rebindParkedKey(identity, used) {
+        if (!identity) return "";
+        const keys = Object.keys(_parkedIdentities);
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            if (used.indexOf(key) !== -1) continue;
+            if (_identitiesMatch(_parkedIdentities[key], identity)) return key;
+        }
+        return "";
     }
     function _finishParking(active, result) {
         const receipt = {transactionId:active.publicId, ok:result.ok === true, status:String(result.status || "error")};
@@ -175,6 +229,8 @@ QtObject {
                 if (active.group.failed) _actionError = "Some group windows could not be restored; review remaining recovery records";
                 else activateWindow(active.group.appId, active.group.focusKey);
             }
+        } else if (receipt.ok && receipt.status === "restored" && request && request.appId && request.key) {
+            activateWindow(request.appId, request.key);
         }
         _pumpParking();
     }
@@ -193,6 +249,18 @@ QtObject {
         _parkingActive = next.shift();
         _parkingQueue = next;
         const request = _parkingActive.request;
+        if (request.op === "park" && request.awaitMetadata) {
+            const pending = _parkingTarget(request.appId, request.key);
+            if (pending) {
+                request.window = pending.identity;
+                request.origin = pending.origin;
+                delete request.awaitMetadata;
+            } else {
+                try { if (_live.item) _live.item.refreshParkingMetadata(); } catch (_) {}
+                _parkingMetadataRetry.restart();
+                return;
+            }
+        }
         const target = request.appId ? _windowTarget(request.appId, request.key) : null;
         if (request.appId && (!target || (request.urgent === true && target.urgent !== true))) {
             _finishParking(_parkingActive, {ok:false, status:"membership-changed", key:request.key});
@@ -201,13 +269,38 @@ QtObject {
         _parkingDeadline.restart();
         _parking.write(JSON.stringify(request) + "\n");
     }
+    function _retryParkingMetadata() {
+        const active = _parkingActive;
+        if (!active || !active.request || !active.request.awaitMetadata) return;
+        const request = active.request;
+        const pending = _parkingTarget(request.appId, request.key);
+        if (pending) {
+            request.window = pending.identity;
+            request.origin = pending.origin;
+            delete request.awaitMetadata;
+            const member = _windowTarget(request.appId, request.key);
+            if (!member) {
+                _finishParking(active, {ok:false, status:"membership-changed", key:request.key});
+                return;
+            }
+            _parkingDeadline.restart();
+            _parking.write(JSON.stringify(request) + "\n");
+            return;
+        }
+        _finishParking(active, {ok:false, status:"identity-mismatch", key:request.key});
+    }
     function _schedule() { Qt.callLater(_refresh); }
     function _sync() {
         if (testMode || !_live.item) return;
         _entries = _live.item.entries;
+        const used = [];
         _windows = _live.item.windows.map(w => {
             const previous = _windows.filter(p => p.handle === w.handle)[0];
-            return {key: previous ? previous.key : _windowSession + String(++_serial), handle: w.handle, appId: w.appId, title: w.title, active: w.active,
+            let identity = null;
+            try { identity = _live.item.parkingIdentity(w.handle); } catch (_) {}
+            const key = _assignWindowKey(previous ? previous.key : "", identity, used);
+            used.push(key);
+            return {key: key, handle: w.handle, appId: w.appId, title: w.title, active: w.active,
                 urgent:w.urgent === true, openedAtMs:previous ? previous.openedAtMs : Date.now()};
         });
     }
@@ -487,9 +580,12 @@ QtObject {
         // JSON round trip strips executable fixture properties and QObject references.
         _entries = JSON.parse(JSON.stringify(entries));
         const previous = new Map(_windows.map(w => [w.fixtureKey, w]));
+        const used = [];
         _windows = JSON.parse(JSON.stringify(windows)).map(w => {
             const old = previous.get(w.key);
-            return {fixtureKey: w.key, key: old ? old.key : _windowSession + String(++_serial), appId: w.appId, title: w.title, active: !!w.active,
+            const key = _assignWindowKey(old ? old.key : "", w.identity, used);
+            used.push(key);
+            return {fixtureKey: w.key, key: key, appId: w.appId, title: w.title, active: !!w.active,
                 identity: w.identity, origin: w.origin};
         });
         _refresh();
@@ -639,7 +735,8 @@ QtObject {
         if (item.canEdit) return _requestLaunch(id, launchers.find(r => r.id === id));
         if (item.running) {
             const matches = _windows.filter(w => item.windows.indexOf(w.key) !== -1);
-            const target = matches.filter(w => w.active)[0] || matches[0];
+            const visible = matches.filter(w => !_parkedWindows.some(r => r.key === w.key));
+            const target = matches.filter(w => w.active)[0] || visible[0] || matches[0];
             if (_parking.running && _parkingReady) {
                 const parked = _parkedWindows.filter(r => item.windows.indexOf(r.key) !== -1);
                 if (parked.length === matches.length && parked.length) {
@@ -651,6 +748,8 @@ QtObject {
                     return minimizeApplication(id) > 0;
                 }
             }
+            if (target && _parkedWindows.some(r => r.key === target.key))
+                return restoreWindow(id, target.key, "here") > 0;
             const accepted = !!target && (testMode || _live.item.activate(target.handle));
             _actionError = accepted ? "" : "Window disappeared before activation";
             return accepted;
@@ -720,8 +819,13 @@ QtObject {
     function parkWindow(appId, key): int {
         if (_startupRecoveryRequired) { _actionError = "Recover parked windows before parking another window"; return 0; }
         const target = _parkingTarget(appId, key);
-        if (!target) { _actionError = "Window identity changed before parking"; return 0; }
-        return _enqueueParking({op:"park", window:target.identity, origin:target.origin});
+        if (target) return _enqueueParking({op:"park", window:target.identity, origin:target.origin});
+        if (testMode || !_live.item || !_windowTarget(appId, key)) {
+            _actionError = "Window identity changed before parking";
+            return 0;
+        }
+        try { _live.item.refreshParkingMetadata(); } catch (_) {}
+        return _enqueueParking({op:"park", appId:appId, key:key, awaitMetadata:true});
     }
     function restoreWindow(appId, key, mode, urgent): int {
         if (mode !== "here" && mode !== "origin") return 0;

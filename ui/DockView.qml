@@ -285,19 +285,24 @@ FocusScope {
     }
     readonly property int hoveredIndex: pointerX < 0 ? -1 : hitIndex(pointerX)
     property int tooltipIndex: -1
+    property bool overCaption: false
     property int tooltipDelay: 450
     readonly property bool tooltipEligible: visible && !surfaceSuspended && !interactionLocked && shelfVisible
     function clearTooltip(): void {
         tooltipTimer.stop();
         tooltipLeaveTimer.stop();
         tooltipIndex = -1;
+        overCaption = false;
     }
     function refreshTooltip(): void {
         if (!tooltipEligible || (hoveredIndex > 0 && !showAppNames)) { clearTooltip(); return; }
         if (hoveredIndex < 0) {
             tooltipTimer.stop();
-            // Bridge only tiny gaps within the shelf, never a real pointer exit.
-            if (pointerX >= 0 && tooltipIndex >= 0) tooltipLeaveTimer.restart();
+            if (overCaption && tooltipIndex >= 0) {
+                tooltipLeaveTimer.stop();
+                return;
+            }
+            if (tooltipIndex >= 0) tooltipLeaveTimer.restart();
             else clearTooltip();
         } else {
             tooltipLeaveTimer.stop();
@@ -850,6 +855,7 @@ FocusScope {
     readonly property bool interactionLocked: wantsKeyboard || fanOpen
     readonly property bool outputRoutingLocked: interactionLocked || settingsOpen || pointerInside || overTrigger || pressedIndex >= 0
     onInteractionLockedChanged: updateVisibility()
+    onOverCaptionChanged: updateVisibility()
     readonly property bool shelfVisible: visibilityState !== "hidden" && visibilityState !== "revealing"
     property real shelfProgress: shelfVisible ? 1 : 0
     readonly property real effectiveProgress: surfaceSuspended ? 0 : reducedMotion ? (shelfVisible ? 1 : 0) : shelfProgress
@@ -886,7 +892,7 @@ FocusScope {
         // must not turn the visibility policy's pointer branch into a dwell bypass.
         if (visibilityState === "revealing" && overTrigger && !pointerInside && !interactionLocked) return;
         const shouldHide = autoHide && (!((intelligentHide && nativeOverlapAvailable) || simulatedIntelligent) || nativeOverlap || simulatedOverlap);
-        visibilityState = Logic.visibilityPolicy(visibilityState, shouldHide, pointerInside || overTrigger, interactionLocked);
+        visibilityState = Logic.visibilityPolicy(visibilityState, shouldHide, pointerInside || overTrigger || overCaption, interactionLocked);
     }
     function releaseInteractions(): void {
         dismissFan(true);
@@ -1227,6 +1233,15 @@ FocusScope {
             // Disabled Controls still intercept hover under desktop styles.
             // Keep this passive caption out of rowInput's hover delivery.
             hoverEnabled: false
+            HoverHandler {
+                enabled: appTooltip.visible
+                onHoveredChanged: {
+                    root.overCaption = hovered;
+                    if (hovered) tooltipLeaveTimer.stop();
+                    else root.refreshTooltip();
+                    root.updateVisibility();
+                }
+            }
             readonly property bool requested: root.tooltipIndex >= 0 && root.tooltipEligible
             readonly property bool opened: requested && opacity === 1
             visible: requested || opacity > 0
@@ -1704,68 +1719,6 @@ FocusScope {
                     onClicked: root.autoHideRequested(!root.autoHide)
                 }
             }
-            CheckBox {
-                id: namesCheck
-                objectName: "show-app-names"
-                parent: advancedSettings
-                y: -38; width: parent.width / 3; height: 30
-                text: "Show app names"
-                checked: root.showAppNames
-                wheelEnabled: false
-                property int pressWheelGeneration: -1
-                onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
-                nextCheckState: function() { return checkState; }
-                onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
-                    root.showAppNamesRequested(!root.showAppNames)
-                Accessible.onPressAction: root.showAppNamesRequested(!root.showAppNames)
-                contentItem: Text {
-                    text: namesCheck.text; color: root.textColor
-                    leftPadding: 30; verticalAlignment: Text.AlignVCenter
-                    font.pixelSize: 13; textFormat: Text.PlainText
-                }
-            }
-            CheckBox {
-                id: appsButtonCheck
-                objectName: "show-apps-button"
-                parent: advancedSettings
-                y: -38; x: parent.width / 3; width: parent.width / 3; height: 30
-                text: "Settings icon"
-                checked: root.showAppsButton
-                wheelEnabled: false
-                property int pressWheelGeneration: -1
-                onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
-                nextCheckState: function() { return checkState; }
-                onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
-                    root.showAppsButtonRequested(!root.showAppsButton)
-                Accessible.onPressAction: root.showAppsButtonRequested(!root.showAppsButton)
-                contentItem: Text {
-                    text: appsButtonCheck.text; color: root.textColor
-                    leftPadding: 30; verticalAlignment: Text.AlignVCenter
-                    font.pixelSize: 13; textFormat: Text.PlainText
-                }
-            }
-            CheckBox {
-                id: overlapCheck
-                objectName: "intelligent-hide"
-                parent: advancedSettings
-                x: 2 * parent.width / 3; y: -38; width: parent.width / 3; height: 30
-                text: "Overlap hide"
-                Accessible.name: "Hide only when windows overlap; shared one-second refresh while mapped"
-                enabled: root.autoHide
-                checked: root.intelligentHide
-                wheelEnabled: false
-                property int pressWheelGeneration: -1
-                onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
-                nextCheckState: function() { return checkState; }
-                onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
-                    root.intelligentHideRequested(!root.intelligentHide)
-                Accessible.onPressAction: if (enabled) root.intelligentHideRequested(!root.intelligentHide)
-                contentItem: Text {
-                    text: overlapCheck.text; color: root.textColor
-                    leftPadding: 30; verticalAlignment: Text.AlignVCenter
-                    font.pixelSize: 13; textFormat: Text.PlainText
-                }
-            }
             Row {
                 y: 326; spacing: 8; width: parent.width
                 TuneButton {
@@ -1849,9 +1802,78 @@ FocusScope {
                 y: (settingsContent.columns === 3 ? 40 : delaySettings.y + delaySettings.height + 16) + 38
                 width: settingsContent.columnWidth
                 height: overrideControls.y + overrideControls.height
+            Flow {
+                id: settingsToggles
+                objectName: "settings-toggles"
+                y: -38
+                width: parent.width
+                spacing: 8
+                CheckBox {
+                    id: namesCheck
+                    objectName: "show-app-names"
+                    implicitWidth: Math.min(settingsToggles.width, contentItem.implicitWidth)
+                    height: 30
+                    text: "Show app names"
+                    checked: root.showAppNames
+                    wheelEnabled: false
+                    property int pressWheelGeneration: -1
+                    onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
+                    nextCheckState: function() { return checkState; }
+                    onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
+                        root.showAppNamesRequested(!root.showAppNames)
+                    Accessible.onPressAction: root.showAppNamesRequested(!root.showAppNames)
+                    contentItem: Text {
+                        text: namesCheck.text; color: root.textColor
+                        leftPadding: 30; verticalAlignment: Text.AlignVCenter
+                        font.pixelSize: 13; textFormat: Text.PlainText
+                    }
+                }
+                CheckBox {
+                    id: appsButtonCheck
+                    objectName: "show-apps-button"
+                    implicitWidth: Math.min(settingsToggles.width, contentItem.implicitWidth)
+                    height: 30
+                    text: "Settings icon"
+                    checked: root.showAppsButton
+                    wheelEnabled: false
+                    property int pressWheelGeneration: -1
+                    onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
+                    nextCheckState: function() { return checkState; }
+                    onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
+                        root.showAppsButtonRequested(!root.showAppsButton)
+                    Accessible.onPressAction: root.showAppsButtonRequested(!root.showAppsButton)
+                    contentItem: Text {
+                        text: appsButtonCheck.text; color: root.textColor
+                        leftPadding: 30; verticalAlignment: Text.AlignVCenter
+                        font.pixelSize: 13; textFormat: Text.PlainText
+                    }
+                }
+                CheckBox {
+                    id: overlapCheck
+                    objectName: "intelligent-hide"
+                    implicitWidth: Math.min(settingsToggles.width, contentItem.implicitWidth)
+                    height: 30
+                    text: "Overlap hide"
+                    Accessible.name: "Hide only when windows overlap; shared one-second refresh while mapped"
+                    enabled: root.autoHide
+                    checked: root.intelligentHide
+                    wheelEnabled: false
+                    property int pressWheelGeneration: -1
+                    onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
+                    nextCheckState: function() { return checkState; }
+                    onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
+                        root.intelligentHideRequested(!root.intelligentHide)
+                    Accessible.onPressAction: if (enabled) root.intelligentHideRequested(!root.intelligentHide)
+                    contentItem: Text {
+                        text: overlapCheck.text; color: root.textColor
+                        leftPadding: 30; verticalAlignment: Text.AlignVCenter
+                        font.pixelSize: 13; textFormat: Text.PlainText
+                    }
+                }
+            }
             Column {
                 id: previewSettings
-                y: 0
+                y: Math.max(0, settingsToggles.y + settingsToggles.height)
                 width: parent.width; spacing: 6
 
                 Row {

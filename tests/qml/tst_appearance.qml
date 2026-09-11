@@ -32,6 +32,7 @@ TestCase {
             mousePress(item, item.width / 2, item.height / 2);
             verify(v.pressedIndex >= 0, "real input must reach the settings slot");
             mouseRelease(item, item.width / 2, item.height / 2);
+            v.settingsOpen = false;
         }
     }
     function test_spacing_fit_and_owned_input_data() {

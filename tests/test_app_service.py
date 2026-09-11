@@ -648,7 +648,7 @@ class AppServiceTests(unittest.TestCase):
                          "reducedMotion": False, "showAppNames": True, "advancedTooltips": False, "launchBounce": True, "tooltipDelay": 450, "revealDelay": 160, "autoHide": True, "intelligentHide": False, "minimizeMode": "active",
                          "reserveSpace": False, "followActiveOutput": False, "monitorMode": "all", "selectedOutputs": [], "folderColor": "theme",
                          "previewsEnabled": True, "livePreviews": False, "showUrgentHint": True,
-                         "urgentOnNotification": True, "urgentSound": False, "urgentSoundName": "bell"})
+                         "urgentOnNotification": True, "urgentSound": False, "urgentSoundName": "bell", "showAppsButton": True})
         self.assertEqual(state["launchers"], [])
         self.assertEqual(state["overrides"], {})
         self.assertEqual(self.config.read_text(), before)

@@ -108,6 +108,7 @@ class FolderScanTests(unittest.TestCase):
             link = parent / "root-link"
             link.symlink_to(root, target_is_directory=True)
             self.assertEqual(module.scan_folder(str(link), 11, "symlink")["status"], "not-directory")
+            self.assertEqual(module.scan_folder(str(link) + "/", 11, "slash")["status"], "not-directory")
 
             actual_scandir = module.os.scandir
             moved = parent / "moved"

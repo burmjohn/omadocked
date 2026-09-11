@@ -32,15 +32,30 @@ TestCase {
         mouseMove(dock, dock.renderedSlots[data.index].center, dock.height - 30);
         const tip = findChild(dock, "app-tooltip");
         tryCompare(tip, "opened", true, 1500);
-        const x = dock.renderedSlots[data.index].center;
-        const y = tip.y + tip.height / 2;
-        verify(y >= dock.shelfRect.y && y < dock.shelfRect.y + dock.shelfRect.height);
+        const local = tip.mapToItem(dock, tip.width / 2, tip.height / 2);
         for (let i = 0; i < 20; ++i) {
             // Real pointer motion re-runs hover delivery over the now-visible caption.
-            mouseMove(dock, x + i % 2, y, 20);
-            compare(dock.pointerInside, true, "caption must not steal row hover");
+            mouseMove(dock, local.x + i % 2, local.y, 20);
+            compare(dock.tooltipIndex, data.index, "caption must not dismiss the row tooltip");
             compare(dock.visibilityState, "shown");
-            compare(dock.tooltipIndex, data.index);
         }
+    }
+
+    function test_captionHoverCancelsAndResumesHide() {
+        const component = Qt.createComponent("../../ui/DockView.qml");
+        compare(component.status, Component.Ready, component.errorString());
+        const dock = createTemporaryObject(component, desktop, {
+            autoHide: true, iconSize: 34, zoomSize: 140, waveWidth: 25,
+            appsManaged: true, applications: [{id: "one", name: "Fixture application", icon: ""}]
+        });
+        dock.shelfEntered();
+        verify(waitForRendering(dock));
+        compare(dock.visibilityState, "shown");
+        dock.shelfExited();
+        compare(dock.visibilityState, "hiding");
+        dock.overCaption = true;
+        compare(dock.visibilityState, "shown");
+        dock.overCaption = false;
+        compare(dock.visibilityState, "hiding");
     }
 }

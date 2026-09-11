@@ -54,6 +54,7 @@ HANDLER
    input.mouseRelease(view,x,y,button);
    return JSON.stringify({pressed:pressed,settings:view.settingsOpen});
   }
+  function closeSettings(): bool { view.settingsOpen=false; return true; }
   function wheel(delta: int): void { input.mouseWheel(view,view.renderedSlots[0].center,view.rowY+15,0,delta); }
  }
 }'''.replace('METHOD',method).replace('HANDLER',handler)
@@ -80,7 +81,10 @@ HANDLER
                         except RuntimeError: pass
                         self.assertLess(time.monotonic(),deadline)
                         time.sleep(.03)
-                    for button in (1,4): self.assertEqual(call('click',button),{'pressed':True,'settings':False})
+                    self.assertEqual(call('click',1),{'pressed':True,'settings':True})
+                    self.assertTrue(call('closeSettings'))
+                    self.assertEqual(call('click',4),{'pressed':True,'settings':False})
+                    self.assertTrue(call('gesture','left',1))
                     call('wheel',-120); call('wheel',120)
                     deadline=time.monotonic()+3
                     while not receipts.exists() or len(receipts.read_text().splitlines())<4:

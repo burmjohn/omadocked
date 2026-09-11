@@ -32,9 +32,16 @@ _MESSAGES = {
 }
 
 
-def _validate_request(path: str, generation: int, token: str, max_inspected: int, limit: int) -> None:
+def _leaf_path(path: str) -> str:
     if not isinstance(path, str) or not os.path.isabs(path) or "\x00" in path:
         raise ValueError("path must be an absolute filesystem path")
+    while len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    return path
+
+
+def _validate_request(path: str, generation: int, token: str, max_inspected: int, limit: int) -> None:
+    _leaf_path(path)
     if (isinstance(generation, bool) or not isinstance(generation, int)
             or not 0 <= generation <= 9_007_199_254_740_991):
         raise ValueError("generation must be a non-negative integer")
@@ -127,6 +134,7 @@ def scan_folder(path: str, generation: int, token: str, *,
     must reopen the root with no-follow semantics and compare device/inode first.
     """
     _validate_request(path, generation, token, max_inspected, limit)
+    path = _leaf_path(path)
     if (isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float))
             or not math.isfinite(timeout_seconds) or timeout_seconds < 0):
         raise ValueError("timeout is invalid")
