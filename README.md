@@ -2,22 +2,42 @@
 
 Native Omarchy dock plugin (`burmjohn.omadocked`).
 
-## Preview
+## Install
+
+```sh
+omarchy plugin add https://github.com/burmjohn/omadocked --enable
+```
+
+Then restart the Omarchy shell (not the session):
+
+```sh
+omarchy-launch-shell
+```
+
+Disable the older **Omadock** plugin if both would show.
+
+## Remove
+
+```sh
+omarchy plugin disable burmjohn.omadocked
+```
+
+Pins stay in `~/.config/omadocked/pins.json` until you delete that file.
+
+## Preview (no install)
 
 ```sh
 make preview
 ```
 
-Opens a standalone bottom dock. It does not install or replace the live plugin by itself.
-
 ## Tests
 
 ```sh
-make test          # spawn-safety guards
+make test
 make test-offscreen
 make lint
 ```
 
-## Config
+## License
 
-Pins and settings: `~/.config/omadocked/pins.json`
+MIT. Issues: https://github.com/burmjohn/omadocked/issues
