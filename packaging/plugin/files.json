@@ -2,7 +2,7 @@
   "Dock.qml": "e67527d06a731227d240987ea7f705972d950b6a0653a97b44cf574b43fdedd9",
   "DockSurface.qml": "9c7130b9fccd1f9fbd0e1a09d99feb33237c89a24a457d26326b92cf8b4b1eeb",
   "shell.qml": "bb9314023205df89e72b5638acf51fb99403a06ad079a081f3fa18e7b8f5191d",
-  "manifest.json": "b000829ce65d87adb5b995b07f51088a2acbbc878f3cbac81f27ff4c08e0c4cf",
+  "manifest.json": "cdae65810016466f759c4d85d9f4f198c01741da839d7864450681bae722c9f2",
   "core/AppLogic.js": "5fd90945d60a3e0d6d7f0ae73aad987b042b2b2b85a78a7dc49e70c5481935fc",
   "core/PreviewLogic.js": "9eff566fad2d645cdb9f2ea216b924968335dee3a0a0da59910257c260a2dce0",
   "core/GestureLogic.js": "622979a9ad3ad2506344f693efaa907336e3631e0f5d99c1f8c1cb0bf6c8a27c",

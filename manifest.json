@@ -2,10 +2,13 @@
   "schemaVersion": 1,
   "id": "burmjohn.omadocked",
   "name": "Omadocked",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "burmjohn",
-  "description": "Native dock with running apps, saved settings and custom launchers. Development preview.",
+  "license": "MIT",
+  "homepage": "https://github.com/burmjohn/omadocked",
+  "description": "Native Omarchy dock with running apps, pins, folders, and custom launchers.",
   "kinds": ["overlay"],
   "keepLoaded": true,
-  "entryPoints": { "overlay": "Dock.qml" }
+  "entryPoints": { "overlay": "Dock.qml" },
+  "tags": ["launcher", "quickshell", "hyprland"]
 }

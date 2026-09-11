@@ -20,6 +20,15 @@ Plugin id: `burmjohn.omadocked`.
 
 Settings and pins are stored in `~/.config/omadocked/pins.json`.
 
+## Requirements
+
+- [Omarchy](https://omarchy.org) with Quickshell
+- Hyprland
+- `python3` and `python-gobject` for desktop-entry launches
+- `xdg-terminal-exec` only if you use command-in-terminal items
+
+Version is `0.1.1` in [`manifest.json`](manifest.json). See [CHANGELOG.md](CHANGELOG.md).
+
 ## Install
 
 ```sh
