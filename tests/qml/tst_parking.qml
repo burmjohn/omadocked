@@ -76,4 +76,19 @@ TestCase {
         compare(Parking.identity(owned,[owned],[parked]),
                 {address:"0xabc",pid:77,class:"Owned",initialClass:"Owned",xwayland:false});
     }
+    function test_emptyIpcRefreshesOnceThenCorrelates() {
+        const top = row(owned, "0xabc", "Owned");
+        const saved = top.lastIpcObject;
+        top.lastIpcObject = {};
+        let refreshes = 0;
+        const result = Parking.recordAfterRefresh(owned, [owned], [top], () => {
+            refreshes++;
+            top.lastIpcObject = saved;
+        });
+        compare(refreshes, 1);
+        verify(result !== null);
+        compare(result.identity.address, "0xabc");
+        compare(Parking.recordAfterRefresh(owned, [owned], [top], () => { refreshes++; }), result);
+        compare(refreshes, 1);
+    }
 }

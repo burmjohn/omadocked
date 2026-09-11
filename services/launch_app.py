@@ -76,6 +76,8 @@ def folder_action(record):
     action = record.get("action")
     if not os.path.isabs(root) or action not in ("entry", "manager", "terminal"):
         raise ValueError("Invalid folder action")
+    while len(root) > 1 and root.endswith("/"):
+        root = root[:-1]
     fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         identity = os.fstat(fd)

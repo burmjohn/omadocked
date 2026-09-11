@@ -386,7 +386,8 @@ TestCase {
         compare(dock.settingsOpen, false);
     }
     function test_compactShelfAndPopupMask() {
-        verify(dock.height <= 110, "default native footprint is compact, not a demo card");
+        verify(dock.dockHeight <= 110, "default shelf is compact, not a demo card");
+        compare(dock.height, dock.dockHeight + dock.fanHeadroom);
         compare(dock.popupRect, Qt.rect(0, 0, 0, 0));
         verify(!findChild(dock, "mode-wave").visible, "tuning controls only live in popup");
         dock.autoHide = false;

@@ -35,6 +35,18 @@ ShellRoot {
         function configure(data: string): bool { return apps.configure(JSON.parse(data)); }
         function activate(app: string): bool { return apps.activate(app); }
         function indicated(app: string, key: string): bool { return apps.activate(app,key); }
+        function clearActive(): bool {
+            apps._windows = apps._windows.map(w => Object.assign({}, w, {active:false}));
+            apps._refresh(); return true;
+        }
+        function groupFlags(): string {
+            const groups = apps.windowGroups || {};
+            const out = {};
+            Object.keys(groups).forEach(id => {
+                out[id] = groups[id].map(w => ({key:w.key, active:!!w.active, parked:w.parked === true}));
+            });
+            return JSON.stringify(out);
+        }
         function urgency(keys: string): bool {
             const urgent = JSON.parse(keys);
             apps._windows = apps._windows.map(w => Object.assign({}, w, {urgent:urgent.indexOf(w.key) >= 0, active:false}));
@@ -42,6 +54,11 @@ ShellRoot {
         }
         function acks(): string { return JSON.stringify(acknowledgements); }
         function reverse(): bool { apps._windows = apps._windows.slice().reverse(); apps._refresh(); return true; }
+        function scrambleKeys(): bool {
+            apps._windows = apps._windows.map(w => Object.assign({}, w, {key: "fresh-" + w.fixtureKey}));
+            apps._refresh(); return true;
+        }
+        function rebindParked(): bool { apps._rebindLiveKeys(); apps._refresh(); return true; }
     }
 }
 '''
@@ -265,16 +282,52 @@ else:sys.exit(2)
         self.assertFalse(result["last"]["ok"]);self.assertEqual(result["parked"],[])
 
     def test_fifo_and_hidden_recovery_survive_controller_reload(self):
-        self.start();self.seed();keys=self.call("snapshot")["items"][0]["windows"]
-        before=self.call("snapshot")["revision"];self.assertGreater(self.call("park","one",keys[0]),0);self.wait_revision(before)
-        self.stop();state=self.start();self.assertEqual([r["key"] for r in state["parked"]],[keys[0]])
-        self.seed();fresh_keys=self.call("snapshot")["items"][0]["windows"]
-        self.assertTrue(set(keys).isdisjoint(fresh_keys),"session keys must not alias different QObjects after controller reload")
+        self.start(); state=self.seed(); keys=self.call("snapshot")["items"][0]["windows"]
+        before=self.call("snapshot")["revision"]; self.assertGreater(self.call("park","one",keys[0]),0); self.wait_revision(before)
+        self.stop(); state=self.start(); self.assertEqual([r["key"] for r in state["parked"]],[keys[0]])
+        self.seed(); fresh=self.call("snapshot"); fresh_keys=fresh["items"][0]["windows"]
+        self.assertEqual(fresh_keys[0], keys[0], "parked identity must rebind to the journal key")
+        self.assertNotEqual(fresh_keys[1], keys[0])
+        self.assertTrue(self.call("groupFlags")["one"][0]["parked"])
         self.assertEqual(self.call("park","one",fresh_keys[1]),0,
                                      "startup recovery must precede new parking")
-        before=state["revision"];transaction=self.call("recover","here");self.assertGreater(transaction,0)
-        done=self.wait_revision(before);self.assertEqual(done["last"]["transactionId"],transaction);self.assertEqual(done["parked"],[])
+        before=state["revision"]; transaction=self.call("restore","one",fresh_keys[0],"here"); self.assertGreater(transaction,0)
+        done=self.wait_revision(before); self.assertEqual(done["last"]["transactionId"],transaction); self.assertEqual(done["parked"],[])
         self.assertEqual(next(r for r in json.loads(self.state.read_text())["clients"] if r["address"]=="0xaaa")["workspace"]["name"],"1")
+
+    def test_mixed_parked_click_prefers_visible_window(self):
+        self.start(); state=self.seed(); keys=state["items"][0]["windows"]
+        before=state["revision"]; self.assertGreater(self.call("park","one",keys[0]),0); self.wait_revision(before)
+        self.call("reverse")
+        self.assertTrue(self.call("clearActive"))
+        before=self.call("snapshot")["revision"]
+        self.assertTrue(self.call("activate","one"))
+        time.sleep(.15)
+        after=self.call("snapshot")
+        self.assertEqual(after["revision"], before)
+        self.assertEqual([r["key"] for r in after["parked"]], [keys[0]])
+
+    def test_late_journal_status_rebinds_existing_window_keys(self):
+        self.start(); state=self.seed(); keys=state['items'][0]['windows']
+        before=state['revision']
+        self.assertGreater(self.call('park','one',keys[0]),0)
+        self.wait_revision(before)
+        self.assertTrue(self.call('scrambleKeys'))
+        scrambled=self.call('snapshot')['items'][0]['windows']
+        self.assertNotEqual(scrambled[0], keys[0])
+        self.assertTrue(self.call('rebindParked'))
+        rebound=self.call('snapshot')['items'][0]['windows']
+        self.assertEqual(rebound[0], keys[0], "late journal identities must replace ephemeral keys")
+
+    def test_individual_restore_focuses_the_restored_window(self):
+        self.start(); state=self.seed(); keys=state["items"][0]["windows"]
+        before=state["revision"]; self.assertGreater(self.call("park","one",keys[0]),0); self.wait_revision(before)
+        self.assertTrue(self.call("clearActive"))
+        before=self.call("snapshot")["revision"]
+        self.assertGreater(self.call("restore","one",keys[0],"here"),0)
+        done=self.wait_revision(before)
+        self.assertEqual(done["parked"], [])
+        self.assertTrue(self.call("groupFlags")["one"][0]["active"])
 
 
 if __name__=="__main__":unittest.main()

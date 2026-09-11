@@ -36,9 +36,14 @@ QtObject {
         handle.activate();
         return true;
     }
+    function refreshParkingMetadata() {
+        Hyprland.refreshToplevels();
+    }
     function parkingRecord(handle): var {
         // PID is only one field in the exact QObject/address/full-identity correlation.
-        return Parking.correlate(handle, ToplevelManager.toplevels.values, Hyprland.toplevels.values);
+        // lastIpcObject is a snapshot; refresh before validating a newly mapped window.
+        return Parking.recordAfterRefresh(handle, ToplevelManager.toplevels.values, Hyprland.toplevels.values,
+            () => Hyprland.refreshToplevels());
     }
     function parkingIdentity(handle): var {
         return Parking.identity(handle, ToplevelManager.toplevels.values, Hyprland.toplevels.values);

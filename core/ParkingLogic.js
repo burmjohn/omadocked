@@ -26,6 +26,13 @@ function identity(handle, waylandRows, hyprlandRows) {
     return result;
 }
 
+function recordAfterRefresh(handle, waylandRows, hyprlandRows, refresh) {
+    const current = correlate(handle, waylandRows, hyprlandRows);
+    if (current) return current;
+    if (typeof refresh === "function") refresh();
+    return correlate(handle, waylandRows, hyprlandRows);
+}
+
 function correlate(handle, waylandRows, hyprlandRows) {
     const top = matched(handle, waylandRows, hyprlandRows);
     const exactIdentity = identity(handle, waylandRows, hyprlandRows);

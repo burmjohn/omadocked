@@ -167,6 +167,23 @@ else: sys.exit(2)
         response=p.request({"id":4,"op":"restore","key":"k","mode":"here"})
         self.assertEqual(response,{"id":4,"ok":True,"status":"restored","key":"k","workspace":"1"})
 
+    def test_empty_stale_session_journal_is_adopted_before_new_park(self):
+        self.journal.parent.mkdir(parents=True)
+        self.journal.write_text(json.dumps({"version": 1, "session": "old-login", "nextSequence": 1, "records": []}) + "\n")
+        self.journal.chmod(0o600)
+        p = self.start(session="new-login")
+        self.assertEqual(p.ready, {"type": "ready", "ok": True, "pending": 0, "blocked": 0})
+        result = self.park(p, "k", "0xaaa", 101, "FixtureA", "1")
+        self.assertEqual(result, {"id": 1, "ok": True, "status": "parked", "key": "k"})
+        journal = json.loads(self.journal.read_text())
+        self.assertEqual(journal["session"], "new-login")
+        status = p.request({"id": 2, "op": "status"})
+        self.assertEqual(status["keys"], ["k"])
+        self.assertEqual(status["blocked"], [])
+        restore = p.request({"id": 3, "op": "restore", "key": "k", "mode": "here"})
+        self.assertTrue(restore["ok"], restore)
+        self.assertEqual(restore["status"], "restored")
+
     def test_startup_recovery_precedes_new_parking_and_stale_session_or_identity_is_blocked(self):
         p=self.start(); self.assertTrue(self.park(p,"k","0xaaa",101,"FixtureA","1")["ok"]); p.close()
         restarted=self.start(); self.assertEqual(restarted.ready,{"type":"ready","ok":True,"pending":1,"blocked":0})

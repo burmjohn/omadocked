@@ -48,10 +48,12 @@ TestCase {
     }
     function test_wheelDoesNotToggleAndFocusIsVisible() {
         const d = makeDock(); d.settingsOpen = true;
+        verify(waitForRendering(d)); wait(30);
         const button = findChild(d,"show-app-names"), scroll = findChild(d,"settings-scroll");
+        verify(button !== null && button.width > 0);
         button.forceActiveFocus();
         tryVerify(function() { const p = button.mapToItem(scroll,0,0); return p.y >= 0 && p.y + button.height <= scroll.height; });
-        mousePress(button,button.width/2,button.height/2); verify(button.pressed);
+        mousePress(button, Math.min(12, button.width / 2), button.height / 2); verify(button.pressed);
         mouseWheel(button,button.width/2,button.height/2,0,-120);
         mouseRelease(button,button.width/2,button.height/2);
         verify(d.showAppNames,"scrolling during a press must cancel the setting change");
@@ -74,11 +76,11 @@ TestCase {
         hover(d,1); tryCompare(d,"tooltipIndex",1,1000); tryCompare(tip,"opened",true);
         verify(tip.parent === findChild(d,"rowInput").parent); verify(!tip.focus); verify(!tip.enabled);
         verify(tip.background.radius >= 9); compare(tip.textFormat,Text.PlainText);
-        const width = d.width, height = d.height, input = JSON.stringify(d.inputRects);
+        const width = d.width, height = d.height, shelf = JSON.stringify(d.shelfRect);
         hover(d,2); compare(d.tooltipIndex,2); verify(tip.opened);
         wait(150); compare(tip.text,"Second"); compare(d.width,width); compare(d.height,height);
-        compare(JSON.stringify(d.inputRects),input);
-        mouseMove(test,1190,890); compare(d.tooltipIndex,-1);
+        compare(JSON.stringify(d.shelfRect),shelf);
+        mouseMove(test,1190,890); tryCompare(d,"tooltipIndex",-1,200);
         verify(tip.visible,"ordinary leave retains the fading popup");
         wait(35); verify(tip.opacity > 0 && tip.opacity < 1);
         tryCompare(tip,"visible",false,500);

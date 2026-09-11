@@ -139,4 +139,12 @@ TestCase {
         gate.hostShell = null;
         compare(gate.state, "unknown");
     }
+    function test_scopedFacadeWithoutProjectionIsUnsupportedContract() {
+        const host = createTemporaryObject(legacyHost, this);
+        const gate = gateFor(host);
+        compare(gate.hostContract, "unsupported");
+        compare(gate.state, "unknown");
+        compare(gate.notificationStateKnown, false);
+        compare(host.audit.lookups, 0);
+    }
 }

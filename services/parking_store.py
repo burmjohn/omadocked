@@ -239,6 +239,12 @@ class Parking:
         self.blocked = []
         records = self.journal.data["records"]
         if self.journal.data["session"] != self.journal.session:
+            if not records:
+                # Empty leftover journals are from a previous login with nothing
+                # parked. Adopt the live compositor session before any mutation.
+                self.journal.data["session"] = self.journal.session
+                self.persist()
+                return
             self.blocked = [r["identity"]["key"] for r in records]
             return
         clients = self.clients()
@@ -283,7 +289,8 @@ class Parking:
     def park(self, request):
         identity, origin = request.get("window"), request.get("origin")
         key = identity.get("key") if isinstance(identity, dict) else None
-        if self.blocked or self.startup_recovery_required:
+        if (self.blocked or self.startup_recovery_required
+                or self.journal.data["session"] != self.journal.session):
             return self.response(request, False, "recovery-required", key)
         if not valid_identity(identity) or not valid_origin(origin) or self.record_for(identity["key"]):
             return self.response(request, False, "invalid", key)
@@ -395,7 +402,7 @@ class Parking:
         if not isinstance(request, dict) or not isinstance(request.get("id"), int):
             raise ValueError("protocol")
         operation = request.get("op")
-        if operation in ("status", "restore", "restore-fifo", "recover"):
+        if operation in ("status", "park", "restore", "restore-fifo", "recover"):
             self.reconcile()
         if operation == "park":
             return self.park(request)
@@ -409,7 +416,8 @@ class Parking:
             records = sorted(self.journal.data["records"], key=lambda r: r["sequence"])
             return {"id": request["id"], "ok": True, "status": "ready",
                     "keys": [r["identity"]["key"] for r in records],
-                    "records": [{"key": r["identity"]["key"], "state": r["state"], "sequence": r["sequence"]}
+                    "records": [{"key": r["identity"]["key"], "state": r["state"], "sequence": r["sequence"],
+                                 "identity": {k: r["identity"][k] for k in r["identity"] if k != "key"}}
                                 for r in records], "blocked": list(self.blocked),
                     "recoveryRequired": self.startup_recovery_required}
         return self.response(request, False, "unsupported")

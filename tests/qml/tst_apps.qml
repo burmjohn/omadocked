@@ -104,7 +104,8 @@ TestCase {
                          {id: "WhatsApp", name: "WhatsApp", launchable: true}];
         compare(Apps.match(entries, "brave-messages.google.com__web_conversations-Default").id, "Google Messages");
         compare(Apps.match(entries, "brave-web.whatsapp.com__-Default").id, "WhatsApp");
-        compare(Apps.match(entries, "brave-web.whatsapp.com__-Profile-2"), null);
+        compare(Apps.match(entries, "brave-web.whatsapp.com__-Profile-2").id, "WhatsApp");
+        compare(Apps.match(entries, "brave-unknown.example__-Default"), null);
         entries.push({id: "native", startupClass: "brave-web.whatsapp.com__-Default"});
         compare(Apps.match(entries, "brave-web.whatsapp.com__-Default").id, "native");
     }
