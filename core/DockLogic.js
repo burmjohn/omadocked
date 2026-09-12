@@ -94,12 +94,20 @@ function resolveIconSize(stored, scale) {
     return stored;
 }
 
+function isChromeId(id) {
+    return id === "omarchy-menu" || id === "menu";
+}
+
+function chromeIds(showAppsButton) {
+    return showAppsButton === false ? ["omarchy-menu"] : ["omarchy-menu", "menu"];
+}
+
 function itemOrder(apps, showAppsButton) {
     const ids = [];
     const list = apps || [];
     for (let i = 0; i < list.length; ++i) {
         const id = typeof list[i] === "string" ? list[i] : (list[i] && list[i].id);
-        if (id && id !== "menu" && ids.indexOf(id) < 0) ids.push(id);
+        if (id && !isChromeId(id) && ids.indexOf(id) < 0) ids.push(id);
     }
-    return showAppsButton === false ? ids : ["menu"].concat(ids);
+    return chromeIds(showAppsButton).concat(ids);
 }

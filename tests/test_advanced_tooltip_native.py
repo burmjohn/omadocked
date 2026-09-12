@@ -43,7 +43,7 @@ class AdvancedTooltipNative(unittest.TestCase):
 ''')
         shell = shell.replace('target: "app-test"', '''target: "app-test"
         function hover(): bool {
-            for (const view of [a,b]) { view.shelfEntered(); view.pointerX=view.renderedSlots[1].center; view.refreshTooltip(); }
+            for (const view of [a,b]) { view.shelfEntered(); view.pointerX=view.renderedSlots[2].center; view.refreshTooltip(); }
             input.wait(30); return true;
         }
         function privateChecks(): string {

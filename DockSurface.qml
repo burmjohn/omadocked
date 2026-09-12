@@ -31,9 +31,10 @@ Item {
             view.order.length * view.slotSize + 24, view.dockHeight, controller.offset);
         return source.evaluate(outputName, shelf);
     }
-    // A grab requested before the compositor accepts the popup-sized surface is
-    // cleared immediately. Wait for native geometry, not an arbitrary delay.
+    // Wait until the opening pointer gesture is finished. Arming a grab during
+    // that press is cleared immediately and would dismiss Settings.
     readonly property bool popupReady: mapped && (view.settingsOpen || view.contextIndex >= 0) && panel.backingWindowVisible
+        && !view.popupGestureBusy && !view.popupSettling
         && Logic.nativeSizeMatches(panel.width, panel.height, view.width, view.height)
     onPopupReadyChanged: popupGrab.active = popupReady
     function reconcile(): void {
@@ -63,7 +64,7 @@ Item {
     }
     function openAppContext(id: string): bool {
         const index = view.order.indexOf(id);
-        if (!mapped || index < 1) return false;
+        if (!mapped || index < 0 || Logic.isChromeId(view.order[index])) return false;
         view.openContext(index);
         return true;
     }
@@ -86,7 +87,13 @@ Item {
     HyprlandFocusGrab {
         id: popupGrab
         windows: [panel]
-        onCleared: view.releaseInteractions()
+        onCleared: {
+            if (view.popupGestureBusy || view.popupSettling) {
+                Qt.callLater(() => { if (root.popupReady) popupGrab.active = true })
+                return
+            }
+            view.releaseInteractions()
+        }
     }
     PanelWindow {
         id: panel
@@ -118,6 +125,12 @@ Item {
                 intersection: Intersection.Combine
                 x: Math.floor(view.popupRect.x); y: Math.floor(view.popupRect.y)
                 width: Math.ceil(view.popupRect.width); height: Math.ceil(view.popupRect.height)
+            }
+            Region {
+                intersection: Intersection.Combine
+                x: 0; y: 0
+                width: (view.settingsOpen || view.contextIndex >= 0) ? view.width : 0
+                height: (view.settingsOpen || view.contextIndex >= 0) ? view.height : 0
             }
             Region {
                 intersection: Intersection.Combine

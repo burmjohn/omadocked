@@ -24,17 +24,17 @@ TestCase {
     function test_toggleCancelsDwellAndShownButPreservesSettingsAndErrors() {
         const d = makeDock();
         compare(d.showAppNames, true);
-        hover(d, 1); wait(100); d.showAppNames = false;
+        hover(d, 2); wait(100); d.showAppNames = false;
         wait(d.tooltipDelay + 50); compare(d.tooltipIndex, -1);
         const tip = findChild(d,"app-tooltip"); verify(!tip.visible);
-        d.showAppNames = true; hover(d,2);
-        tryCompare(d,"tooltipIndex",2,1000); tryCompare(tip,"opened",true);
+        d.showAppNames = true; hover(d,3);
+        tryCompare(d,"tooltipIndex",3,1000); tryCompare(tip,"opened",true);
         d.showAppNames = false; compare(d.tooltipIndex,-1); compare(tip.opacity,0);
         wait(20); compare(tip.opacity,0);
         tryCompare(tip,"visible",false,200);
         d.appError = "Owned fixture failure"; verify(findChild(d,"app-status").visible);
         compare(findChild(d,"art-one").parent.Accessible.name,"One <b>literal</b>");
-        hover(d,0); tryCompare(d,"tooltipIndex",0,1000); compare(tip.text,"Settings");
+        hover(d,1); tryCompare(d,"tooltipIndex",1,1000); compare(tip.text,"Settings");
         verify(!d.wantsKeyboard); compare(d.popupRect.width,0);
     }
     function test_settingsControlUsesCommittedStateAndKeyboard() {
@@ -61,37 +61,37 @@ TestCase {
 
     function test_interruptEnterAndTeardownNeverReplays() {
         const d = makeDock(); const tip = findChild(d,"app-tooltip");
-        hover(d,1); tryCompare(d,"tooltipIndex",1,1000);
+        hover(d,2); tryCompare(d,"tooltipIndex",2,1000);
         d.reducedMotion = true; compare(tip.opacity,0); compare(d.tooltipIndex,-1);
         tryCompare(tip,"opened",true,1000); compare(tip.motionOffset,0); compare(tip.opacity,1);
-        d.reducedMotion = false; hover(d,2); d.resetSurface();
+        d.reducedMotion = false; hover(d,3); d.resetSurface();
         compare(d.tooltipIndex,-1); compare(tip.opacity,0);
         wait(d.tooltipDelay + 150); compare(d.tooltipIndex,-1); verify(!tip.visible);
-        const pending = makeDock(); hover(pending,1); pending.destroy();
+        const pending = makeDock(); hover(pending,2); pending.destroy();
         wait(600); // Timer/Connections owners are destroyed, without stale callbacks.
     }
 
     function test_transitionsPassiveStableAndReducedMotion() {
         const d = makeDock(); const tip = findChild(d,"app-tooltip");
-        hover(d,1); tryCompare(d,"tooltipIndex",1,1000); tryCompare(tip,"opened",true);
+        hover(d,2); tryCompare(d,"tooltipIndex",2,1000); tryCompare(tip,"opened",true);
         verify(tip.parent === findChild(d,"rowInput").parent); verify(!tip.focus); verify(!tip.enabled);
         verify(tip.background.radius >= 9); compare(tip.textFormat,Text.PlainText);
         const width = d.width, height = d.height, shelf = JSON.stringify(d.shelfRect);
-        hover(d,2); compare(d.tooltipIndex,2); verify(tip.opened);
+        hover(d,3); compare(d.tooltipIndex,3); verify(tip.opened);
         wait(150); compare(tip.text,"Second"); compare(d.width,width); compare(d.height,height);
         compare(JSON.stringify(d.shelfRect),shelf);
         mouseMove(test,1190,890); tryCompare(d,"tooltipIndex",-1,200);
         verify(tip.visible,"ordinary leave retains the fading popup");
         wait(35); verify(tip.opacity > 0 && tip.opacity < 1);
         tryCompare(tip,"visible",false,500);
-        d.reducedMotion = true; hover(d,1); tryCompare(tip,"opened",true,1000);
+        d.reducedMotion = true; hover(d,2); tryCompare(tip,"opened",true,1000);
         compare(tip.opacity,1); compare(tip.motionOffset,0);
         d.resetSurface(); compare(d.tooltipIndex,-1); verify(!tip.visible);
     }
 
     function test_captionSitsAboveShelf() {
         const d = makeDock(); const tip = findChild(d,"app-tooltip");
-        hover(d,1); tryCompare(tip,"opened",true,1000);
+        hover(d,2); tryCompare(tip,"opened",true,1000);
         verify(tip.height > 0);
         verify(tip.y + tip.height <= d.height - d.dockHeight - 12);
         verify(tip.y >= 0);

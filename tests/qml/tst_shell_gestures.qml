@@ -17,22 +17,31 @@ TestCase {
     }
     function cleanup() { action.target=null; dock.destroy(); }
     function logo() { return Qt.point(dock.renderedSlots[0].center,dock.rowY+15); }
+    function settings() { return Qt.point(dock.renderedSlots[1].center,dock.rowY+15); }
     function click(p,button) {
         const input=findChild(dock,"rowInput");
         mousePress(dock,p.x,p.y,button); verify(input.pressed);
         mouseRelease(dock,p.x,p.y,button);
     }
+    function test_omarchyMenuIsLeftOfSettings() {
+        compare(dock.order[0], "omarchy-menu");
+        compare(dock.order[1], "menu");
+        click(logo(), Qt.LeftButton);
+        compare(action.count, 1);
+        compare(action.signalArguments[0][0], "left");
+        verify(!dock.settingsOpen);
+    }
     function test_leftSettingsMiddleTerminal() {
-        click(logo(),Qt.LeftButton);
+        click(settings(),Qt.LeftButton);
         compare(action.count,0); verify(dock.settingsOpen);
         dock.settingsOpen=false;
         click(logo(),Qt.MiddleButton);
         compare(action.count,1); compare(action.signalArguments[0][0],"middle");
     }
     function test_settingsRemainKeyboardAndRightAccessible() {
-        click(logo(),Qt.RightButton); verify(dock.settingsOpen); compare(action.count,0);
+        click(settings(),Qt.RightButton); verify(dock.settingsOpen); compare(action.count,0);
         dock.settingsOpen=false;
-        dock.selectIndex(0); verify(dock.settingsOpen); compare(action.count,0);
+        dock.selectIndex(1); verify(dock.settingsOpen); compare(action.count,0);
     }
     function test_emptySpaceRightOnly() {
         const p=Qt.point(dock.shelfRect.x+1,dock.rowY+15);

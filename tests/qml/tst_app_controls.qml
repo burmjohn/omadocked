@@ -23,7 +23,7 @@ TestCase {
         exact.clear(); launch.clear(); primary.clear();
     }
     function cleanup() { exact.target=null; launch.target=null; primary.target=null; dock.destroy(); }
-    function point() { return Qt.point(dock.rowX + dock.slotSize * 1.5, dock.rowY + 15); }
+    function point() { return Qt.point(dock.rowX + dock.slotSize * 2.5, dock.rowY + 15); }
     function test_windowMenuWheelSelectsThenEnterConfirms() {
         dock.previewsEnabled=false;
         verify(dock.openWindowChooser("a")); wait(0);
@@ -37,7 +37,7 @@ TestCase {
     }
     function test_contextGroupScopeFrozenAndPressReorderCanceled() {
         groupClose.target=dock; groupClose.clear(); groupRestore.target=dock; groupRestore.clear();
-        dock.openContext(1);
+        dock.openContext(2);
         let button=findChild(dock,"context-close-windows");
         verify(button !== null, "explicit scoped group close control");
         compare(button.text,"Close All Windows (3)");
@@ -52,7 +52,7 @@ TestCase {
         compare(groupClose.signalArguments[0][0],"a");
         compare(JSON.stringify(groupClose.signalArguments[0][1]),JSON.stringify(["a1","a2","a3"]));
         compare(dock.contextIndex,-1);
-        dock.openContext(1);
+        dock.openContext(2);
         button=findChild(dock,"context-restore-here");
         button.Accessible.pressAction();
         compare(groupRestore.count,1); compare(groupRestore.signalArguments[0][0],"a");

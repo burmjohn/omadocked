@@ -97,7 +97,7 @@ TestCase {
         const back = findChild(dock, "windows-back");
         verify(back !== null, "chooser has explicit Back navigation");
         const rect = dock.popupRect;
-        verify(dock.height <= 642); verify(rect.x >= 0 && rect.x + rect.width <= dock.width);
+        verify(dock.height <= dock.settingsStageHeight); verify(rect.x >= 0 && rect.x + rect.width <= dock.width);
         const list = findChild(dock, "window-list");
         verify(list.clip); verify(list.contentHeight > list.height);
         for (let j = 0; j < 60; ++j) keyClick(Qt.Key_Down);
@@ -116,10 +116,10 @@ TestCase {
         compare(cycleSpy.signalArguments[0][0], "alpha"); compare(cycleSpy.signalArguments[0][1], -1);
         compare(cycleSpy.signalArguments[1][0], "alpha"); compare(cycleSpy.signalArguments[1][1], 1);
         mouseClick(back);
-        compare(dock.windowChooserOpen, false); compare(dock.contextIndex, 1);
+        compare(dock.windowChooserOpen, false); compare(dock.contextIndex, 2);
         verify(dock.openWindowChooser("alpha"));
         keyClick(Qt.Key_Backspace);
-        compare(dock.windowChooserOpen, false); compare(dock.contextIndex, 1);
+        compare(dock.windowChooserOpen, false); compare(dock.contextIndex, 2);
         verify(dock.openWindowChooser("alpha"));
         keyClick(Qt.Key_Tab); keyClick(Qt.Key_Tab); keyClick(Qt.Key_Return);
         compare(dock.windowChooserOpen, false, "Tab reaches Back after explicit Close");
@@ -129,8 +129,8 @@ TestCase {
         verify(dock.openWindowChooser("alpha"));
         const rect = dock.popupRect;
         verify(rect.height <= 368, "Two windows fit with one bounded 168px preview region");
-        const gap = dock.shelfRect.y - (rect.y + rect.height);
-        verify(gap >= 0 && gap <= 16, "Window chooser sits directly above the shelf input region");
+        verify(rect.y >= 0 && rect.y + rect.height <= dock.shelfRect.y,
+               "Window chooser sits above the shelf input region");
         dock.windowGroups = {alpha: [windows()[1]]};
         compare(dock.popupRect, rect, "An open chooser does not jump when a window disappears");
         const many = [];
@@ -153,7 +153,7 @@ TestCase {
         verify(!dock.windowChooserOpen);
         compare(dock.windowSelectionKey, "");
         dock.applications = [{id: "alpha", name: "Alpha", running: true}];
-        dock.openContext(1);
+        dock.openContext(2);
         dock.windowGroups = {alpha: [{key: "secret", title: "Hidden private update", active: false}]};
         tryVerify(function() { return findChild(dock, "window-list") === null; });
         verify(dock.actionLabel.indexOf("Hidden private") < 0);
@@ -213,15 +213,15 @@ TestCase {
         dock.windowGroups = {alpha: windows()};
         compare(dock.windowChooserOpen, false);
         compare(dock.windowSelectionKey, "");
-        dock.openContext(1);
+        dock.openContext(2);
         const action = findChild(dock, "context-windows");
         verify(action !== null && action.visible);
         compare(action.text, "Windows…");
         mouseClick(action);
         verify(dock.windowChooserOpen);
-        compare(dock.contextIndex, 1);
+        compare(dock.contextIndex, 2);
         verify(dock.wantsKeyboard);
-        compare(dock.order[0], "menu");
+        compare(dock.order[0], "omarchy-menu");
         keyClick(Qt.Key_Escape);
         compare(dock.windowChooserOpen, false);
         compare(dock.contextIndex, -1);

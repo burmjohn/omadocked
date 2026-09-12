@@ -71,7 +71,7 @@ QtObject {
         # Exact production per-output geometry and input bindings, hosted inside
         # an owned offscreen Window, never instantiate a native layer surface.
         start = surface.index("    readonly property var overlapPolicy:")
-        end = surface.index("    // A grab", start)
+        end = surface.index("    readonly property bool popupReady:", start)
         bridge = surface[start:end]
         consumer_start = surface.index("    OverlapConsumer {")
         consumer_end = surface.index("    readonly property var overlapPolicy:", consumer_start)

@@ -73,7 +73,7 @@ TestCase {
         const view = createTemporaryObject(viewFactory, test);
         view.reducedMotion = true;
         view.applications = [{id:"one", name:"One", pending:true, launchToken:1}];
-        view.tooltipIndex = 1;
+        view.tooltipIndex = 2;
         const tip = findChild(view, "app-tooltip");
         compare(tip.text, "One [starting…]");
         const anchor = tip.anchorX;

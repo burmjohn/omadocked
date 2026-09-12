@@ -33,9 +33,9 @@ TestCase {
         verify(first.visible && second.visible);
         wait(30); // Static children are already rendered at windowShown; allow layout polish.
         compare(first.wantsKeyboard, false); compare(second.wantsKeyboard, false);
-        mouseClick(first, first.rowX + first.slotSize / 2, first.rowY + first.baseIconSize / 2, Qt.RightButton);
+        mouseClick(first, first.rowX + first.slotSize * 1.5, first.rowY + first.baseIconSize / 2, Qt.RightButton);
         compare(first.monitorPickerOpen, true);
-        second.openContext(1);
+        second.openContext(2);
         compare(first.monitorPickerOpen, false);
         compare(first.wantsKeyboard, false);
         compare(second.wantsKeyboard, true);
@@ -46,7 +46,7 @@ TestCase {
         verify(first.activeFocus, "new owner must retain actual Qt keyboard focus");
         first.releaseInteractions();
         const original = first.order.slice();
-        const dragX = first.rowX + first.slotSize * 1.5;
+        const dragX = first.rowX + first.slotSize * 2.5;
         const dragY = first.rowY + first.baseIconSize / 2;
         mousePress(first, dragX, dragY);
         mouseMove(first, dragX + first.slotSize * 2, dragY);

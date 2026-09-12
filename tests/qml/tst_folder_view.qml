@@ -51,7 +51,7 @@ TestCase {
     function test_context_has_manager_and_terminal_without_scan() {
         const view = createView();
         directSpy.target = view; directSpy.clear();
-        view.openContext(1);
+        view.openContext(2);
         verify(view.contextActions.indexOf(12) >= 0);
         verify(view.contextActions.indexOf(13) >= 0);
         view.invokeContext(13);
@@ -68,7 +68,7 @@ TestCase {
         view.selectId(idA);
         wait(30);
         const input = findChild(view, "rowInput");
-        mouseClick(input, view.rowX + view.slotSize * 2.5 - input.x, input.height / 2);
+        mouseClick(input, view.rowX + view.slotSize * 3.5 - input.x, input.height / 2);
         compare(view.folderChooserOpen, true);
         compare(view.contextId, idB);
         compare(openSpy.count, 2);

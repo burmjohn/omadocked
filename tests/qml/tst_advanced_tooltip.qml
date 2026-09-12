@@ -17,8 +17,8 @@ TestCase {
         const d=createTemporaryObject(c,test,{autoHide:false,reducedMotion:true,motionMode:"off",appsManaged:true,
             applications:[{id:"one",name:"One",running:true,windowCount:count,windows:keys,icon:""}],windowGroups:{one:rows}});
         verify(d); compare(d.advancedTooltips,false); d.advancedTooltips=true;
-        d.tooltipDelay=20; d.shelfEntered(); d.pointerX=d.renderedSlots[1].center;
-        tryCompare(d,"tooltipIndex",1); return d;
+        d.tooltipDelay=20; d.shelfEntered(); d.pointerX=d.renderedSlots[2].center;
+        tryCompare(d,"tooltipIndex",2); return d;
     }
     function test_privateVisibleList() {
         const d=makeDock(11), loader=findChild(d,"window-hover-loader");
@@ -75,7 +75,7 @@ TestCase {
         rememberedList=loader.item; verify(rememberedList!==null);
         d.applications=[{id:"other",name:"Other",running:true,windowCount:1,windows:["other-key"]},d.applications[0]];
         compare(loader.active,false); tryCompare(test,"rememberedList",null);
-        d.pointerX=d.renderedSlots[2].center; tryCompare(d,"tooltipIndex",2);
+        d.pointerX=d.renderedSlots[3].center; tryCompare(d,"tooltipIndex",3);
         verify(loader.item); rememberedList=loader.item;
         d.destroy(); tryCompare(test,"rememberedList",null);
         const pending=makeDock(2); pending.clearTooltip(); pending.tooltipDelay=100;
@@ -91,9 +91,9 @@ TestCase {
         d.windowGroups={one:[]}; tryCompare(loader,"item",null);
         d.windowGroups={one:rows}; verify(loader.item);
         d.clearTooltip(); compare(loader.active,false); tryCompare(loader,"item",null);
-        d.tooltipIndex=1; verify(loader.item);
+        d.tooltipIndex=2; verify(loader.item);
         d.surfaceSuspended=true; compare(loader.active,false); tryCompare(loader,"item",null);
-        d.surfaceSuspended=false; d.tooltipIndex=1; verify(loader.item);
+        d.surfaceSuspended=false; d.tooltipIndex=2; verify(loader.item);
         d.resetSurface(); compare(loader.active,false); tryCompare(loader,"item",null);
         // Ordinary chooser remains independently usable with hover and images off.
         d.surfaceSuspended=false; d.advancedTooltips=false; d.previewsEnabled=false;
@@ -109,14 +109,14 @@ TestCase {
     function test_policyAndBounds(data) {
         const d=makeDock(12), loader=findChild(d,"window-hover-loader"),tip=findChild(d,"app-tooltip");
         d.availableWidth=data.width; d.availableHeight=data.height; wait(30);
-        d.pointerX=d.renderedSlots[1].center; tryCompare(d,"tooltipIndex",1);
+        d.pointerX=d.renderedSlots[2].center; tryCompare(d,"tooltipIndex",2);
         verify(tip.x>=0); verify(tip.x+tip.width<=d.width+.01);
         verify(tip.y>=0); verify(tip.y+tip.height<=d.height+.01);
         compare(loader.item.shownCount,Math.min(8,Math.max(0,Math.floor((d.height-d.dockHeight)/18)-1)));
         const height=d.height, rects=JSON.stringify(d.inputRects), reservation=d.reservedHeight;
         d.clearTooltip(); compare(d.height,height); compare(JSON.stringify(d.inputRects),rects); compare(d.reservedHeight,reservation);
-        d.tooltipIndex=1; d.reducedMotion=false; wait(30); d.reducedMotion=true;
-        compare(tip.opacity,0); tryCompare(d,"tooltipIndex",1); compare(tip.opacity,1);
+        d.tooltipIndex=2; d.reducedMotion=false; wait(30); d.reducedMotion=true;
+        compare(tip.opacity,0); tryCompare(d,"tooltipIndex",2); compare(tip.opacity,1);
         d.showAppNames=false; compare(loader.active,false); compare(tip.opacity,0);
         d.showAppNames=true; d.tooltipDelay=250; d.refreshTooltip();
         d.surfaceSuspended=true; wait(300); compare(d.tooltipIndex,-1);

@@ -73,7 +73,7 @@ def main():
                     if restart:
                         s = seed([])
                         assert [(a["id"], a["running"], a["pinned"]) for a in s["apps"]] == [("fixture-two", False, True), ("fixture-one", False, True)]
-                        assert all(o["view"]["order"] == ["menu", "fixture-two", "fixture-one"] for o in s["outputs"])
+                        assert all(o["view"]["order"] == ["omarchy-menu", "menu", "fixture-two", "fixture-one"] for o in s["outputs"])
                         assert ipc("pin", "fixture-two", "false") == "true"
                         assert json.loads(config.read_text())["pins"] == ["fixture-one"]
                         checks.append("closed pins and order restored after process restart; unpin removes closed icon")
@@ -81,7 +81,7 @@ def main():
                         assert initial["apps"] == [] and not config.exists()
                         s = seed(WINDOWS)
                         assert len(s["apps"]) == 2 and all(a["running"] for a in s["apps"])
-                        assert all(o["view"]["order"] == ["menu", "fixture-one", "fixture-two"] for o in s["outputs"])
+                        assert all(o["view"]["order"] == ["omarchy-menu", "menu", "fixture-one", "fixture-two"] for o in s["outputs"])
                         for app in ENTRIES:
                             assert ipc("pin", app["id"], "true") == "true"
                         saved = json.loads(config.read_text())
@@ -91,7 +91,7 @@ def main():
                         assert json.loads(config.read_text())["pins"] == ["fixture-two", "fixture-one"]
                         assert ipc("reorderApps", ' ["fixture-two", "fixture-two"]') == "false"
                         s = snapshot()
-                        assert all(o["view"]["order"] == ["menu", "fixture-two", "fixture-one"] for o in s["outputs"])
+                        assert all(o["view"]["order"] == ["omarchy-menu", "menu", "fixture-two", "fixture-one"] for o in s["outputs"])
                         checks.append("shared running model; atomic pin/reorder read-back; invalid reorder rejected")
                         if args.visible:
                             names = s["activeOutputs"]

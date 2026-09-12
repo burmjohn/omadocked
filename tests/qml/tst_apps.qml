@@ -112,7 +112,7 @@ TestCase {
     function test_configValidation() {
         compare(Apps.parsePins('{"version":1,"pins":["browser","pwa-one"]}').pins, ["browser", "pwa-one"]);
         for (const text of ['{', '', '{"version":2,"pins":[]}', '{"version":1,"pins":["a","a"]}',
-                            '{"version":1,"pins":["menu"]}', '{"version":1,"pins":["../a"]}']) {
+                            '{"version":1,"pins":["menu"]}', '{"version":1,"pins":["omarchy-menu"]}', '{"version":1,"pins":["../a"]}']) {
             verify(Apps.parsePins(text).error.length > 0, text);
         }
     }

@@ -38,13 +38,13 @@ def run():
             assert state["phase"] == 3, state
             assert state["nonlaunching"] and not state["visible"], state
             assert state["testMode"] is True and state["apps"] == [], state
-            assert all(row["view"]["order"] == ["menu"] for row in state["outputs"]), "No app fixtures in the native dock"
+            assert all(row["view"]["order"] == ["omarchy-menu", "menu"] for row in state["outputs"]), "No app fixtures in the native dock"
             assert state["screenCount"] > 0 and state["output"], state
             assert state["fallback"] and state["fallbackReason"] == "requested-output-unavailable", state
             assert state["offset"] == 0 and state["width"] < 700, state
             assert state["keyboardFocus"] == "none", state
             assert state["view"]["state"] == "hidden", state
-            assert list(state["icons"]) == ["menu"] and state["icons"]["menu"], state
+            assert set(state["icons"]) == {"menu", "omarchy-menu"} and state["icons"]["menu"] and state["icons"]["omarchy-menu"], state
             assert state.get("iconSize") == 44, "Shared icon size should default to 44px"
             for size in (28, 72, 44):
                 assert ipc("iconSize", str(size)).stdout.strip() == "true"

@@ -2,7 +2,7 @@
 
 function validId(id) {
     return typeof id === "string" && id.length > 0 && id.length <= 512
-        && id !== "menu" && !/[\/\\\x00-\x1f]/.test(id) && id !== "." && id !== "..";
+        && id !== "menu" && id !== "omarchy-menu" && !/[\/\\\x00-\x1f]/.test(id) && id !== "." && id !== "..";
 }
 
 function parsePins(text) {
@@ -87,5 +87,5 @@ function build(entries, windows, pins, previous, overrides) {
     const rest = Object.keys(groups).filter(id => pins.indexOf(id) === -1).sort();
     const stable = previous.filter(id => rest.indexOf(id) !== -1);
     rest.forEach(id => { if (stable.indexOf(id) === -1) stable.push(id); });
-    return pins.concat(stable).filter(id => id !== "menu").map(id => groups[id]);
+    return pins.concat(stable).filter(id => id !== "menu" && id !== "omarchy-menu").map(id => groups[id]);
 }
