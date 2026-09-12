@@ -24,18 +24,18 @@ TestCase {
         verify(waitForRendering(d)); activation.target = d; activation.clear();
         const row = findChild(d,"rowInput"), tip = findChild(d,"app-tooltip");
         mouseMove(test,1190,890);
-        mouseMove(d,d.renderedSlots[1].center,d.height-25);
+        mouseMove(d,d.renderedSlots[2].center,d.height-25);
         const input = JSON.stringify(d.inputRects), width=d.width, height=d.height;
         if (data.phase !== "dwell") {
-            tryCompare(d,"tooltipIndex",1,1000);
+            tryCompare(d,"tooltipIndex",2,1000);
             if (data.phase === "enter") {
                 verify(tip.visible); verify(tip.opacity > 0 && tip.opacity < 1);
             } else tryCompare(tip,"opened",true);
         }
-        let index = 1;
+        let index = 2;
         if (data.phase === "adjacent") {
-            index = 2; mouseMove(d,d.renderedSlots[2].center,d.height-25);
-            compare(d.tooltipIndex,2);
+            index = 3; mouseMove(d,d.renderedSlots[3].center,d.height-25);
+            compare(d.tooltipIndex,3);
         }
         if (data.phase === "exit") {
             d.clearTooltip(); wait(30);
@@ -51,9 +51,9 @@ TestCase {
         const x=d.renderedSlots[index].center, y=d.height-25;
         mousePress(d,x,y);
         verify(row.pressed,"visible tooltip must deliver the actual Qt press to rowInput");
-        compare(d.pressedId,index===1?"one":"two");
+        compare(d.pressedId,index===2?"one":"two");
         mouseRelease(d,x,y);
-        compare(activation.count,1); compare(activation.signalArguments[0][0],index===1?"one":"two");
+        compare(activation.count,1); compare(activation.signalArguments[0][0],index===2?"one":"two");
         compare(d.width,width); compare(d.height,height);
         if (data.motion === "off") compare(JSON.stringify(d.inputRects),input);
         compare(d.inputRects.length,2); // Only shelf + trigger; magnification may resize shelf.

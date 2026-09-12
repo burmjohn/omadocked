@@ -42,4 +42,22 @@ TestCase {
         tryCompare(dock, "visibilityState", "hidden", 600);
         compare(dock.settingsOpen, false);
     }
+    function test_settingsOpenKeepsShelfShownWithoutHideBounce() {
+        dock.resetSurface();
+        dock.autoHide = true;
+        dock.shelfEntered();
+        tryCompare(dock, "visibilityState", "shown", 500);
+        compare(dock.shelfProgress, 1);
+        const stageHeight = dock.height;
+        dock.settingsOpen = true;
+        verify(dock.interactionLocked);
+        compare(dock.height, stageHeight, "opening Settings must not resize the layer");
+        dock.shelfExited();
+        wait(dock.hideDelay + 50);
+        compare(dock.visibilityState, "interacting", "settings must not auto-hide the shelf");
+        verify(dock.shelfVisible);
+        compare(dock.shelfProgress, 1);
+        dock.settingsOpen = false;
+        tryCompare(dock, "visibilityState", "hiding", 200);
+    }
 }

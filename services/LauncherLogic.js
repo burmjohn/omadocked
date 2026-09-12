@@ -12,7 +12,7 @@ function uuid() {
     });
 }
 function validDesktopId(id) {
-    return typeof id === "string" && id.length > 0 && id.length <= 512 && id !== "menu"
+    return typeof id === "string" && id.length > 0 && id.length <= 512 && id !== "menu" && id !== "omarchy-menu"
         && id !== "." && id !== ".." && !/[\/\\\x00-\x1f]/.test(id);
 }
 function normalize(record) {

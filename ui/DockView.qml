@@ -162,14 +162,20 @@ FocusScope {
         launcherSaveTransactionId = 0;
         if (success) closeItemEditor();
     }
-    onSettingsOpenChanged: if (!settingsOpen) {
-        editorOpen = false;
-        sizeSlider.cancelPreview();
-        transparencySlider.cancelPreview();
-        zoomSlider.cancelPreview();
-        waveSlider.cancelPreview();
-        tooltipDelaySlider.cancelPreview();
-        revealDelaySlider.cancelPreview();
+    onSettingsOpenChanged: {
+        if (settingsOpen) {
+            if (popupGestureBusy) beginPopupSettle()
+            else popupSettling = false
+        } else {
+            if (contextIndex < 0) { popupSettling = false; popupSettleTimer.stop() }
+            editorOpen = false
+            sizeSlider.cancelPreview()
+            transparencySlider.cancelPreview()
+            zoomSlider.cancelPreview()
+            waveSlider.cancelPreview()
+            tooltipDelaySlider.cancelPreview()
+            revealDelaySlider.cancelPreview()
+        }
     }
     onEditorOpenChanged: if (!editorOpen) {
         // The transaction can finish, but no longer owns this disposable draft.
@@ -280,7 +286,7 @@ FocusScope {
     function insertionAt(px: real): int {
         for (let i = 0; i < renderedSlots.length; ++i)
             if (px < renderedSlots[i].center)
-                return Math.max(1, i);
+                return Math.max(Logic.chromeIds(showAppsButton).length, i);
         return order.length;
     }
     readonly property int hoveredIndex: pointerX < 0 ? -1 : hitIndex(pointerX)
@@ -295,7 +301,7 @@ FocusScope {
         overCaption = false;
     }
     function refreshTooltip(): void {
-        if (!tooltipEligible || (hoveredIndex > 0 && !showAppNames)) { clearTooltip(); return; }
+        if (!tooltipEligible || (hoveredIndex >= 0 && !showAppNames && !Logic.isChromeId(order[hoveredIndex]))) { clearTooltip(); return; }
         if (hoveredIndex < 0) {
             tooltipTimer.stop();
             if (overCaption && tooltipIndex >= 0) {
@@ -406,7 +412,7 @@ FocusScope {
     Timer {
         id: tooltipTimer
         interval: root.tooltipDelay
-        onTriggered: if (root.tooltipEligible && root.hoveredIndex >= 0 && (root.showAppNames || root.hoveredIndex === 0))
+        onTriggered: if (root.tooltipEligible && root.hoveredIndex >= 0 && (root.showAppNames || Logic.isChromeId(root.order[root.hoveredIndex])))
             root.tooltipIndex = root.hoveredIndex
     }
     Timer {
@@ -589,7 +595,16 @@ FocusScope {
         if (contextApp && contextApp.kind === "folder" && contextApp.enabled !== false && !contextApp.pending) actions.push(12, 13);
         return actions;
     }
-    onContextIndexChanged: if (contextIndex < 0) { folderChooserOpen = false; windowChooserOpen = false; desktopActionsOpen = false; contextId = ""; }
+    onContextIndexChanged: {
+        if (contextIndex >= 0) beginPopupSettle()
+        else {
+            folderChooserOpen = false
+            windowChooserOpen = false
+            desktopActionsOpen = false
+            contextId = ""
+            if (!settingsOpen) { popupSettling = false; popupSettleTimer.stop() }
+        }
+    }
     function moveContextAction(delta: int): void {
         const index = contextActions.indexOf(contextActionIndex);
         contextActionIndex = contextActions[(index + delta + contextActions.length) % contextActions.length];
@@ -639,6 +654,7 @@ FocusScope {
     }
     function openContext(index: int): void {
         if (index < 0 || index >= order.length) return;
+        if (order[index] === "omarchy-menu") return;
         if (order[index] === "menu") { toggleMonitorPicker(); return; }
         closeMonitorPicker();
         cancelDrag();
@@ -655,6 +671,17 @@ FocusScope {
     }
     property bool keyboardActive: false
     readonly property bool wantsKeyboard: keyboardActive || dragActive || contextIndex >= 0 || monitorPickerOpen
+    readonly property bool popupGestureBusy: rowInput.pressed || pressedIndex >= 0
+    property bool popupSettling: false
+    Timer {
+        id: popupSettleTimer
+        interval: 80
+        onTriggered: root.popupSettling = false
+    }
+    function beginPopupSettle(): void {
+        popupSettling = true
+        popupSettleTimer.restart()
+    }
     onWantsKeyboardChanged: {
         if (wantsKeyboard)
             forceActiveFocus();
@@ -662,14 +689,14 @@ FocusScope {
             focus = false;
     }
     property int focusIndex: 0
-    property string focusId: "menu"
+    property string focusId: "omarchy-menu"
     function moveFocus(delta: int): void {
         let next = focusIndex;
         do { next = (next + delta + order.length) % order.length; }
         while (appMeta[order[next]] && appMeta[order[next]].kind === "separator");
         focusIndex = next;
     }
-    onFocusIndexChanged: focusId = order[focusIndex] || "menu";
+    onFocusIndexChanged: focusId = order[focusIndex] || "omarchy-menu";
     function enterKeyboard(): void {
         surfaceSuspended = false;
         keyboardActive = true;
@@ -735,6 +762,7 @@ FocusScope {
         selectId(order[index]);
     }
     function selectId(id: string): void {
+        if (id === "omarchy-menu") { shellGestureRequested("left", 0); return; }
         if (id === "menu") { toggleMonitorPicker(); return; }
         const app = appMeta[id];
         if (!app || order.indexOf(id) < 0 || app.pending || app.enabled === false || app.kind === "separator") return;
@@ -765,7 +793,7 @@ FocusScope {
     readonly property var appMeta: {
         const result = Object.create(null);
         for (const app of applications || [])
-            if (app && typeof app.id === "string" && app.id && app.id !== "menu") result[app.id] = app;
+            if (app && typeof app.id === "string" && app.id && !Logic.isChromeId(app.id)) result[app.id] = app;
         return result;
     }
     property var localOrder: []
@@ -774,7 +802,7 @@ FocusScope {
         for (const app of applications || [])
             if (app && appMeta[app.id] && ids.indexOf(app.id) < 0) ids.push(app.id);
         if (appsManaged || !localOrder.length) return Logic.itemOrder(ids, showAppsButton);
-        const arranged = localOrder.filter(id => ids.indexOf(id) >= 0 && id !== "menu");
+        const arranged = localOrder.filter(id => ids.indexOf(id) >= 0 && !Logic.isChromeId(id));
         return Logic.itemOrder(arranged.concat(ids.filter(id => arranged.indexOf(id) < 0)), showAppsButton);
     }
     onOrderChanged: {
@@ -789,21 +817,25 @@ FocusScope {
         if (tooltipIndex < 0 || order[tooltipIndex] !== appTooltip.captionId) clearTooltip();
     }
     function commitDrag(): void {
-        if (!dragActive || !pressedId || pressedId === "menu" || JSON.stringify(order) !== JSON.stringify(dragSnapshot)) { cancelDrag(); return; }
+        if (!dragActive || !pressedId || Logic.isChromeId(pressedId) || JSON.stringify(order) !== JSON.stringify(dragSnapshot)) { cancelDrag(); return; }
         const next = Logic.insertOrder(dragSnapshot, dragSnapshot.indexOf(pressedId), insertionIndex);
         const changed = JSON.stringify(next) !== JSON.stringify(order);
         cancelDrag();
         if (!changed) return;
         if (!appsManaged) localOrder = next;
         actionLabel = appsManaged ? "Reorder requested" : "temporary order";
-        reorderRequested(next.slice(1));
+        reorderRequested(next.slice(Logic.chromeIds(showAppsButton).length));
     }
     property var icons: {
         const result = Object.create(null);
         for (const id of Object.keys(appMeta)) result[id] = appMeta[id].icon || "";
         return result;
     }
-    function appName(id: string): string { return id === "menu" ? "Settings" : appMeta[id] ? appMeta[id].name || id : ""; }
+    function appName(id: string): string {
+        if (id === "omarchy-menu") return "Omarchy";
+        if (id === "menu") return "Settings";
+        return appMeta[id] ? appMeta[id].name || id : "";
+    }
     property color shelfColor: "#20232b"
     property color textColor: "#eef0f6"
     property color accentColor: "#a7c7ff"
@@ -816,12 +848,12 @@ FocusScope {
     readonly property real rowY: height - baseIconSize - 24
     // Reserve capacity at the maximum setting, including with popups closed.
     // Extra transparent width is input-masked; sliders never shift popup position.
+    readonly property real settingsStageHeight: settingsPopup.height + 16 + maxDockHeight
+    // Keep the bottom-anchored layer sized for Settings even while closed so
+    // opening the panel does not resize the window or slide the shelf.
     width: Math.min(Math.max(1136, Math.ceil(24 + 72 * (order.length + Math.min(order.length, 5) + (order.length - 1) * 8 / 44))), availableWidth)
-    // Reserve maximum shelf height while a popup is open: its screen position
-    // stays fixed when a slider changes icon geometry on a bottom-anchored window.
-    height: settingsOpen ? settingsPopup.height + 16 + maxDockHeight
-        : contextIndex >= 0 ? contextCard.height + 16 + (windowChooserOpen || desktopActionsOpen ? dockHeight : maxDockHeight)
-        : dockHeight + Math.max(fanHeadroom, advancedTooltips ? Math.max(0, Math.min(180, availableHeight - dockHeight)) : 0)
+    height: Math.max(dockHeight + Math.max(fanHeadroom, advancedTooltips ? Math.max(0, Math.min(180, availableHeight - dockHeight)) : 0),
+        settingsStageHeight)
     clip: true
 
     property bool autoHide: true
@@ -852,7 +884,7 @@ FocusScope {
     property bool surfaceSuspended: false
     property bool pointerInside: false
     property bool overTrigger: false
-    readonly property bool interactionLocked: wantsKeyboard || fanOpen
+    readonly property bool interactionLocked: wantsKeyboard || fanOpen || settingsOpen
     readonly property bool outputRoutingLocked: interactionLocked || settingsOpen || pointerInside || overTrigger || pressedIndex >= 0
     onInteractionLockedChanged: updateVisibility()
     onOverCaptionChanged: updateVisibility()
@@ -989,10 +1021,10 @@ FocusScope {
                 required property string modelData
                 readonly property bool separator: (root.appMeta[modelData] || {}).kind === "separator"
                 readonly property var app: root.appMeta[modelData] || {}
-                readonly property int windowCount: app.running && !app.canEdit && modelData !== "menu"
+                readonly property int windowCount: app.running && !app.canEdit && !Logic.isChromeId(modelData)
                     && modelData.indexOf("launcher:") !== 0 && (!app.kind || app.kind === "application")
                     ? Math.max(0, Math.floor(Number(app.windowCount) || 0)) : 0
-                objectName: modelData === "menu" ? "settings-item" : "item-" + modelData
+                objectName: modelData === "menu" ? "settings-item" : modelData === "omarchy-menu" ? "omarchy-menu-item" : "item-" + modelData
                 readonly property var geometry: root.renderedSlots[index] || {left: 0, right: 0, scale: 1}
                 x: geometry.left - 2
                 y: root.rowY
@@ -1042,7 +1074,7 @@ FocusScope {
                     readonly property var meta: root.appMeta[slot.modelData] || ({})
                     property string failedCandidate: ""
                     readonly property string candidate: meta.folderIconCandidate || ""
-                    source: candidate && candidate !== failedCandidate ? candidate : slot.modelData === "menu" ? root.icons.menu || "" : meta.icon || root.icons[slot.modelData] || ""
+                    source: candidate && candidate !== failedCandidate ? candidate : Logic.isChromeId(slot.modelData) ? root.icons[slot.modelData] || "" : meta.icon || root.icons[slot.modelData] || ""
                     onStatusChanged: if (status === Image.Error && candidate && source.toString() === candidate) {
                         const failed = candidate;
                         Qt.callLater(() => { if (art.candidate === failed) art.failedCandidate = failed; });
@@ -1143,11 +1175,15 @@ FocusScope {
                 root.cancelDrag();
                 const delta = wheel.angleDelta.y || wheel.pixelDelta.y;
                 const id = root.order[root.hitIndex(x + wheel.x)] || "";
-                if (delta && id === "menu") root.shellGestureRequested("wheel", delta);
+                if (delta && id === "omarchy-menu") root.shellGestureRequested("wheel", delta);
                 else if (delta) root.selectWheelWindow(id, delta < 0 ? 1 : -1);
                 wheel.accepted = true;
             }
             onPressed: mouse => {
+                if (root.settingsOpen && !root.editorOpen) {
+                    mouse.accepted = true;
+                    return;
+                }
                 const hit = root.hitIndex(x + mouse.x);
                 const item = root.appMeta[root.order[hit]];
                 const folderSwitch = root.folderChooserOpen && mouse.button === Qt.LeftButton && item && item.kind === "folder";
@@ -1175,7 +1211,7 @@ FocusScope {
                 const dy = mouse.y - root.pressPosition.y;
                 if (Math.sqrt(dx * dx + dy * dy) >= 8) {
                     if (root.folderChooserOpen) { root.cancelDrag(); return; }
-                    if (root.pressedIndex === 0) { root.pressedIndex = -1; return; }
+                    if (Logic.isChromeId(root.pressedId)) { root.pressedIndex = -1; return; }
                     root.dragActive = true;
                 }
                 if (root.dragActive)
@@ -1188,6 +1224,10 @@ FocusScope {
             onCanceled: root.cancelDrag()
             onReleased: mouse => {
                 if (mouse.button !== Qt.LeftButton && mouse.button !== Qt.MiddleButton) return;
+                if (root.settingsOpen && !root.editorOpen && root.pressedIndex < 0) {
+                    root.settingsOpen = false;
+                    return;
+                }
                 if (root.pressedIndex < 0)
                     return;
                 if (mouse.x < 0 || mouse.x >= width || mouse.y < 0 || mouse.y >= height) {
@@ -1198,9 +1238,12 @@ FocusScope {
                     root.commitDrag();
                 } else {
                     const id = root.pressedId;
-                    if (id === "menu") {
-                        if (root.hitIndex(x + mouse.x) === 0) {
-                            if (mouse.button === Qt.MiddleButton) root.shellGestureRequested("middle", 0);
+                    if (Logic.isChromeId(id)) {
+                        if (root.hitIndex(x + mouse.x) === root.pressedIndex) {
+                            if (id === "omarchy-menu") {
+                                if (mouse.button === Qt.MiddleButton) root.shellGestureRequested("middle", 0);
+                                else root.shellGestureRequested("left", 0);
+                            } else if (mouse.button === Qt.MiddleButton) root.shellGestureRequested("middle", 0);
                             else root.selectId(id);
                         }
                     } else if (mouse.button === Qt.MiddleButton) {
@@ -1262,8 +1305,8 @@ FocusScope {
             function updateCaption(): void {
                 if (root.tooltipIndex < 0) return; // Retain text during exit.
                 const id = captionId;
-                retainedText = id === "menu"
-                    ? "Settings"
+                retainedText = id === "omarchy-menu" ? "Omarchy"
+                    : id === "menu" ? "Settings"
                     : root.appName(id) + ((root.appMeta[id] || {}).pending ? " [starting…]" : "");
             }
             Connections {
@@ -1349,6 +1392,16 @@ FocusScope {
             }
         }
     }
+    MouseArea {
+        id: settingsDismiss
+        objectName: "settings-dismiss"
+        anchors.fill: parent
+        visible: root.settingsOpen && !root.editorOpen
+        enabled: visible
+        z: 40
+        onPressed: mouse => { mouse.accepted = true }
+        onReleased: mouse => { mouse.accepted = true; root.settingsOpen = false }
+    }
     Popup {
         id: settingsPopup
         objectName: "settings-popup"
@@ -1360,15 +1413,16 @@ FocusScope {
         height: Math.max(1, Math.min(570, root.availableHeight - root.maxDockHeight - 16))
         padding: 16
         visible: root.settingsOpen
-        modal: true
+        modal: false
         dim: false
         focus: true
+        z: 30
         onAboutToShow: {
             addItem.forceActiveFocus();
             const flick = settingsScroll.contentItem as Flickable;
             if (flick) flick.contentY = 0;
         }
-        closePolicy: (root.editorOpen ? Popup.NoAutoClose : Popup.CloseOnEscape) | Popup.CloseOnPressOutside
+        closePolicy: root.editorOpen ? Popup.NoAutoClose : Popup.CloseOnEscape
         onClosed: { root.settingsOpen = false; if (root.keyboardActive) root.forceActiveFocus(); }
         background: Rectangle {
             color: Qt.rgba(root.shelfColor.r, root.shelfColor.g, root.shelfColor.b, 1)

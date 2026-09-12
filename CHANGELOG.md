@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3 — 2026-09-12
+
+Omarchy menu button left of Settings. Settings keeps the shelf in place when
+opening, and a click outside the panel closes it.
+
 ## 0.1.2 — 2026-09-11
 
 Parking session rollover, identity rebind, importer destination validation,

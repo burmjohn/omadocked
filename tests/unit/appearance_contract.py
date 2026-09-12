@@ -79,7 +79,7 @@ def main():
             assert not owned_layers(proc.pid)
             assert ipc("settings", "NOT-A-CONNECTED-OUTPUT", "true") == "false"
             assert state["height"] <= 110, "Closed dock should be a compact icon row"
-            assert all(o["view"]["order"][0] == "menu" for o in state["outputs"])
+            assert all(o["view"]["order"][0] == "omarchy-menu" for o in state["outputs"])
             ipc("autohide", "false")
             ipc("reducedMotion", "true")
             ipc("show")

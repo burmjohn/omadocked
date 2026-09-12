@@ -9,7 +9,7 @@ function validId(id) {
 
 // Settings reserves an app ID, not a desktop-entry action ID.
 function validAppId(id) {
-    return validId(id) && id !== "menu";
+    return validId(id) && id !== "menu" && id !== "omarchy-menu";
 }
 
 function metadata(actions, requireExec) {

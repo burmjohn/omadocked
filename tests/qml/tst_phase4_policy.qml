@@ -18,13 +18,17 @@ TestCase {
         compare(Logic.resolveIconSize(0, 0.5), 28);
     }
 
-    function test_item_order_keeps_settings_slot_by_default() {
+    function test_item_order_keeps_omarchy_menu_left_of_settings() {
         const apps = [{id: "brave-browser"}, {id: "signal"}];
-        compare(Logic.itemOrder(apps, true), ["menu", "brave-browser", "signal"]);
+        compare(Logic.chromeIds(true), ["omarchy-menu", "menu"]);
+        compare(Logic.itemOrder(apps, true), ["omarchy-menu", "menu", "brave-browser", "signal"]);
+        compare(Logic.itemOrder([{id: "omarchy-menu"}, {id: "menu"}, {id: "brave-browser"}], true),
+                ["omarchy-menu", "menu", "brave-browser"]);
     }
 
     function test_item_order_can_hide_settings_slot() {
         const apps = [{id: "brave-browser"}, {id: "signal"}];
-        compare(Logic.itemOrder(apps, false), ["brave-browser", "signal"]);
+        compare(Logic.chromeIds(false), ["omarchy-menu"]);
+        compare(Logic.itemOrder(apps, false), ["omarchy-menu", "brave-browser", "signal"]);
     }
 }

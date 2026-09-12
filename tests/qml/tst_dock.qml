@@ -20,7 +20,7 @@ TestCase {
             {id: "editor", name: "editor", icon: "", running: false},
             {id: "music", name: "music", icon: "", running: false},
             {id: "keys", name: "keys", icon: "", running: false}
-        ], icons: {menu: "", terminal: "", browser: "", files: "", editor: "", music: "", keys: ""}});
+        ], icons: {menu: "", "omarchy-menu": "", terminal: "", browser: "", files: "", editor: "", music: "", keys: ""}});
         verify(dock !== null);
         verify(dock.visible);
         verify(waitForRendering(dock));
@@ -32,11 +32,12 @@ TestCase {
             dock = null;
         }
     }
+    function settingsSlot() { return dock.renderedSlots[dock.order.indexOf("menu")]; }
     SignalSpy { id: saveSpy; signalName: "saveLauncherRequested" }
     function test_addEditorSharesBoundedPopupAndCancel() {
         dock.autoHide = false;
         dock.availableWidth = 360;
-        dock.selectIndex(0);
+        dock.selectIndex(dock.order.indexOf("menu"));
         const popup = findChild(dock, "settings-popup");
         const geometry = dock.popupRect;
         const height = dock.height;
@@ -91,13 +92,13 @@ TestCase {
         verify(art.sourceSize.width >= Math.ceil(72 * dock.peakScale), "decode covers maximum rendered size");
         verify(art.sourceSize.width <= 108, "bounded decode, not unbounded texture cache");
         const size = art.sourceSize;
-        dock.pointerX = dock.renderedSlots[1].center;
+        dock.pointerX = dock.renderedSlots[2].center;
         wait(140);
         compare(art.sourceSize, size, "animated scale never changes decode request");
     }
     function test_settingsDoesNotReserveEmptyMonitorRows() {
         dock.availableOutputs = [];
-        dock.selectIndex(0);
+        dock.selectIndex(dock.order.indexOf("menu"));
         const footer = findChild(dock, "settings-footer");
         const emptyY = footer.y;
         dock.availableOutputs = Array(20).fill("output");
@@ -107,7 +108,7 @@ TestCase {
         verify(scroll.contentHeight > scroll.height, "all monitor rows use the one outer overflow viewport");
     }
     function test_settingsKeyboardFocusRevealsOverflowAndReopenResets() {
-        dock.autoHide = false; dock.availableWidth = 360; dock.selectIndex(0);
+        dock.autoHide = false; dock.availableWidth = 360; dock.selectIndex(dock.order.indexOf("menu"));
         const scroll = findChild(dock, "settings-scroll");
         const field = findChild(dock, "override-desktop-id");
         verify(waitForRendering(scroll));
@@ -116,14 +117,14 @@ TestCase {
             const point = field.mapToItem(scroll, 0, 0);
             return point.y >= 0 && point.y + field.height <= scroll.height;
         });
-        dock.closeMonitorPicker(); dock.selectIndex(0);
+        dock.closeMonitorPicker(); dock.selectIndex(dock.order.indexOf("menu"));
         compare(scroll.contentItem.contentY, 0, "settings reopen at the visible heading and Add Item");
         const add = findChild(dock, "add-item");
         verify(add.mapToItem(scroll, 0, 0).y >= 0, "rounded header buttons are not clipped by the scroller");
     }
     function test_settingsOverflowControlsArePointerReachable() {
         dock.autoHide = false; dock.availableWidth = 360;
-        dock.canRecover = true; dock.selectIndex(0);
+        dock.canRecover = true; dock.selectIndex(dock.order.indexOf("menu"));
         const scroll = findChild(dock, "settings-scroll");
         verify(scroll !== null);
         tryVerify(function() { return scroll.contentHeight > scroll.height; });
@@ -148,7 +149,7 @@ TestCase {
     function test_popupReadabilityIsIndependentOfShelf() {
         dock.shelfColor = Qt.rgba(0.1, 0.15, 0.2, 0.3);
         dock.transparency = 100;
-        dock.selectIndex(0);
+        dock.selectIndex(dock.order.indexOf("menu"));
         const popup = findChild(dock, "settings-popup");
         compare(popup.background.color.a, 1, "popup background is opaque even with an alpha-bearing shelf theme");
         for (const size of [28, 72]) {
@@ -158,13 +159,14 @@ TestCase {
             compare(findChild(dock, "mode-wave").contentItem.font.pixelSize, 13);
         }
         dock.settingsOpen = false;
-        dock.openContext(1);
+        dock.openContext(dock.order.indexOf("terminal"));
         compare(findChild(dock, "context-card").color.a, 1);
     }
     function test_popupKeyboardContainmentAndOutsideClick() {
         dock.autoHide = false;
         dock.availableOutputs = ["left", "right"];
         dock.enterKeyboard();
+        dock.focusIndex = dock.order.indexOf("menu");
         keyClick(Qt.Key_Return);
         const popup = findChild(dock, "settings-popup");
         verify(popup.activeFocus);
@@ -173,7 +175,7 @@ TestCase {
         for (let i = 0; i < 24; ++i) {
             keyClick(Qt.Key_Tab);
             verify(popup.activeFocus, "Tab remains inside the settings popup");
-            compare(dock.focusIndex, 0);
+            compare(dock.focusIndex, dock.order.indexOf("menu"));
         }
         keyClick(Qt.Key_Escape);
         compare(dock.settingsOpen, false);
@@ -184,10 +186,15 @@ TestCase {
         compare(dock.selection, "", "dismissal cannot click through to an app");
         compare(dock.pressedIndex, -1);
         compare(dock.dragActive, false);
+        dock.settingsOpen = true;
+        wait(120);
+        compare(findChild(dock, "settings-popup").modal, false);
+        mouseClick(dock, 8, 4);
+        compare(dock.settingsOpen, false, "click outside the settings box closes it");
     }
     function test_unmanagedDisplayControlsApplyLocally() {
         dock.availableOutputs = ["left", "right"];
-        dock.selectIndex(0);
+        dock.selectIndex(dock.order.indexOf("menu"));
         mouseClick(findChild(dock, "selected-displays"));
         compare(dock.monitorMode, "selected");
         compare(dock.selectedOutputs, ["left", "right"]);
@@ -217,7 +224,7 @@ TestCase {
     function test_sliderPreviewCommitsOnceAndDismissalCancels(data) {
         dock.settingsManaged = true; dock.autoHide = false;
         previewSpy.target = dock; previewSpy.signalName = data.signal; previewSpy.clear();
-        dock.selectIndex(0);
+        dock.selectIndex(dock.order.indexOf("menu"));
         const slider = findChild(dock, data.slider);
         const geometry = dock.popupRect;
         const height = dock.height;
@@ -237,7 +244,7 @@ TestCase {
         mouseRelease(dock, 1, 1);
         compare(previewSpy.count, 1, "dismissal cancels uncommitted preview");
         compare(dock[data.effective], data.maximum);
-        dock.selectIndex(0); compare(slider.value, data.maximum);
+        dock.selectIndex(dock.order.indexOf("menu")); compare(slider.value, data.maximum);
         slider.forceActiveFocus(); keyClick(Qt.Key_Left);
         compare(previewSpy.count, 2, "keyboard changes commit discretely");
         previewSpy.target = null;
@@ -249,7 +256,7 @@ TestCase {
         dock.transparency = Qt.binding(function() { return appearance.transparency; });
         sizeSpy.target = dock; transparencySpy.target = dock;
         sizeSpy.clear(); transparencySpy.clear();
-        dock.selectIndex(0);
+        dock.selectIndex(dock.order.indexOf("menu"));
         const size = findChild(dock, "size-slider");
         const alpha = findChild(dock, "transparency-slider");
         size.forceActiveFocus();
@@ -313,7 +320,8 @@ TestCase {
             }
         }
         dock.reducedMotion = true;
-        for (let i = 1; i < dock.order.length; ++i) {
+        for (let i = 0; i < dock.order.length; ++i) {
+            if (dock.order[i] === "omarchy-menu" || dock.order[i] === "menu") continue;
             mouseClick(dock, dock.renderedSlots[i].center, dock.rowY + dock.baseIconSize / 2);
             compare(dock.selection, dock.order[i], "each resized app target is still inert/selectable");
         }
@@ -321,7 +329,7 @@ TestCase {
     function test_transparencySliderDoesNotFadeContents() {
         compare(dock.transparency, 0);
         dock.reducedMotion = true;
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         const slider = findChild(dock, "transparency-slider");
         verify(slider !== null);
         compare(slider.from, 0); compare(slider.to, 100);
@@ -355,7 +363,7 @@ TestCase {
     }
     function test_sizeSliderLiveMouseAndKeyboard() {
         compare(dock.iconSize, 44);
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         const slider = findChild(dock, "size-slider");
         verify(slider !== null);
         compare(slider.from, 28); compare(slider.to, 72); compare(slider.stepSize, 2);
@@ -387,7 +395,6 @@ TestCase {
     }
     function test_compactShelfAndPopupMask() {
         verify(dock.dockHeight <= 110, "default shelf is compact, not a demo card");
-        compare(dock.height, dock.dockHeight + dock.fanHeadroom);
         compare(dock.popupRect, Qt.rect(0, 0, 0, 0));
         verify(!findChild(dock, "mode-wave").visible, "tuning controls only live in popup");
         dock.autoHide = false;
@@ -395,17 +402,17 @@ TestCase {
         wait(180);
         const peak = dock.baseIconSize * 0.45 + dock.baseIconSize * 20 / 44 * 0.45;
         verify(dock.rowY - peak >= dock.shelfRect.y, "peak-wave headroom is inside input region");
-        const compactHeight = dock.height;
+        const stageHeight = dock.height;
         const width = dock.width;
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
-        verify(dock.height > compactHeight);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
+        compare(dock.height, stageHeight, "opening Settings must not resize the bottom-anchored layer");
         compare(dock.width, width, "opening popup never shifts native x position");
         const popup = findChild(dock, "settings-popup");
         compare(dock.popupRect, Qt.rect(popup.x, popup.y, popup.width, popup.height));
         verify(dock.popupRect.y + dock.popupRect.height < dock.shelfRect.y);
         compare(dock.inputRects.length, 3);
         mouseClick(findChild(dock, "close-settings"));
-        compare(dock.height, compactHeight);
+        compare(dock.height, stageHeight);
         dock.openContext(2);
         const card = findChild(dock, "context-card");
         compare(dock.popupRect, Qt.rect(card.x, card.y, card.width, card.height));
@@ -418,24 +425,31 @@ TestCase {
         const y = dock.rowY + 22;
         mousePress(dock, dock.renderedSlots[0].center, y);
         mouseMove(dock, dock.renderedSlots[4].center, y);
+        compare(dock.dragActive, false, "Omarchy menu is never a drag source");
+        mouseRelease(dock, dock.renderedSlots[4].center, y);
+        compare(dock.order, original);
+        mousePress(dock, settingsSlot().center, y);
+        mouseMove(dock, dock.renderedSlots[4].center, y);
         compare(dock.dragActive, false, "settings is never a drag source");
         mouseRelease(dock, dock.renderedSlots[4].center, y);
         compare(dock.order, original);
         compare(dock.settingsOpen, false, "dragging fixed item is not a click");
-        mousePress(dock, dock.renderedSlots[3].center, y);
+        const files = dock.order.indexOf("files");
+        mousePress(dock, dock.renderedSlots[files].center, y);
         mouseMove(dock, dock.renderedSlots[0].left, y);
         compare(dock.dragActive, true);
-        compare(dock.insertionIndex, 1);
+        compare(dock.insertionIndex, 2);
         mouseRelease(dock, dock.renderedSlots[0].left, y);
-        compare(dock.order[0], "menu");
-        compare(dock.order[1], "files");
-        compare(dock.order.length, 7);
+        compare(dock.order[0], "omarchy-menu");
+        compare(dock.order[1], "menu");
+        compare(dock.order[2], "files");
+        compare(dock.order.length, 8);
     }
     function test_fixedFirstOpensFunctionalSettings() {
-        compare(dock.order, ["menu", "terminal", "browser", "files", "editor", "music", "keys"]);
+        compare(dock.order, ["omarchy-menu", "menu", "terminal", "browser", "files", "editor", "music", "keys"]);
         const first = findChild(dock, "settings-item");
         verify(first !== null);
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         compare(dock.settingsOpen, true);
         const popup = findChild(dock, "settings-popup");
         verify(popup !== null && popup.opened);
@@ -445,6 +459,7 @@ TestCase {
         keyClick(Qt.Key_Escape);
         compare(dock.settingsOpen, false);
         dock.enterKeyboard();
+        dock.focusIndex = dock.order.indexOf("menu");
         keyClick(Qt.Key_Return);
         compare(dock.settingsOpen, true);
         keyClick(Qt.Key_Escape);
@@ -455,7 +470,7 @@ TestCase {
         dock.settingsManaged = true;
         failOnWarning("QQuickItem: Cannot set activeFocusOnTab to false once item is the active focus item.");
         dock.availableOutputs = ["left", "right"];
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         const card = findChild(dock, "settings-popup");
         verify(card !== null && card.visible, "bounded monitor picker exists");
         verify(waitForRendering(card.contentItem));
@@ -484,7 +499,7 @@ TestCase {
     function test_pickerBackgroundConsumesInput() {
         dock.availableOutputs = ["left", "right"];
         dock.reducedMotion = true;
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         const card = findChild(dock, "settings-popup");
         verify(waitForRendering(card.contentItem));
         // Padding is over real row targets, not a child button.
@@ -506,7 +521,7 @@ TestCase {
     SignalSpy { id: reducedSpy; signalName: "reducedMotionRequested" }
     SignalSpy { id: hideSpy; signalName: "autoHideRequested" }
     function test_managedSettingsPreserveBindings() {
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         verify(waitForRendering(findChild(dock, "settings-popup").contentItem));
         verify(dock.settingsManaged !== undefined, "shared settings request contract exists");
         dock.settingsManaged = true;
@@ -537,7 +552,7 @@ TestCase {
     }
     function test_displaysPickerLocksAndEscapes() {
         dock.availableOutputs = ["left", "right"];
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         compare(dock.settingsOpen, true);
         compare(dock.wantsKeyboard, true);
         mouseMove(test, 750, 750);
@@ -546,7 +561,7 @@ TestCase {
         keyClick(Qt.Key_Escape);
         compare(dock.settingsOpen, false);
         compare(dock.wantsKeyboard, false);
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         dock.resetSurface();
         compare(dock.settingsOpen, false);
         compare(dock.wantsKeyboard, false);
@@ -571,14 +586,14 @@ TestCase {
         compare(dock.scaleAt(4), 1);
     }
     function test_mouseSelectionIsInert() {
-        const x = dock.rowX + dock.slotSize * 1.5;
+        const x = dock.rowX + dock.slotSize * 2.5;
         mouseMove(dock, x, dock.rowY + 22);
         tryCompare(dock, "pointerX", x);
         mouseClick(dock, x, dock.rowY + 22);
         compare(dock.selection, "terminal");
         verify(dock.actionLabel.indexOf("terminal") >= 0);
         compare(dock.actionLabel, "terminal", "view emits requests only; no desktop service is imported");
-        mouseClick(dock, dock.rowX + dock.slotSize * 2.5, dock.rowY + 22);
+        mouseClick(dock, dock.rowX + dock.slotSize * 3.5, dock.rowY + 22);
         compare(dock.selection, "browser");
     }
     function test_revealCancellationAndHideDwell() {
@@ -626,12 +641,14 @@ TestCase {
         verify(dock.activeFocus);
         compare(dock.focusIndex, 0);
         keyClick(Qt.Key_Right);
-        compare(dock.focusIndex, 1);
+        keyClick(Qt.Key_Right);
+        compare(dock.focusIndex, dock.order.indexOf("terminal"));
         keyClick(Qt.Key_Return);
         compare(dock.selection, "terminal");
         dock.shelfExited();
         wait(400);
         compare(dock.visibilityState, "interacting");
+        keyClick(Qt.Key_Left);
         keyClick(Qt.Key_Left);
         keyClick(Qt.Key_Left);
         compare(dock.focusIndex, dock.order.length - 1);
@@ -643,7 +660,7 @@ TestCase {
     function test_dragInsertionCommitsOnlyInside() {
         dock.autoHide = false;
         const original = dock.order.slice();
-        const x = dock.rowX + dock.slotSize * 1.5;
+        const x = dock.rowX + dock.slotSize * 2.5;
         const y = dock.rowY + 22;
         mousePress(dock, x, y);
         mouseMove(dock, x + 4, y);
@@ -656,7 +673,7 @@ TestCase {
         compare(dock.order, original);
         mouseRelease(dock, x + dock.slotSize * 3, y);
         compare(dock.dragActive, false);
-        compare(dock.order[4], "terminal");
+        compare(dock.order[5], "terminal");
         compare(dock.selection, "");
         verify(dock.actionLabel.indexOf("temporary order") >= 0);
     }
@@ -680,7 +697,7 @@ TestCase {
         dock.autoHide = false;
         dock.enterKeyboard();
         const original = dock.order.slice();
-        const x = dock.rowX + dock.slotSize * 1.5;
+        const x = dock.rowX + dock.slotSize * 2.5;
         const y = dock.rowY + 22;
         mousePress(dock, x, y);
         mouseMove(dock, x + 120, y);
@@ -703,7 +720,7 @@ TestCase {
         verify(dock.actionLabel.indexOf("canceled") >= 0);
     }
     function test_nativeTuningControls() {
-        mouseClick(dock, dock.renderedSlots[0].center, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         verify(waitForRendering(findChild(dock, "settings-popup").contentItem));
         const zoom = findChild(dock, "mode-zoom");
         verify(zoom !== null, "native tuning controls exist");
@@ -730,7 +747,7 @@ TestCase {
         verify(bounds[0].left < dock.rowX);
         const x = bounds[0].left + 2;
         compare(dock.hitIndex(x), 0);
-        mouseClick(dock, x, dock.rowY + 22, Qt.RightButton);
+        mouseClick(dock, settingsSlot().center, dock.rowY + 22, Qt.RightButton);
         compare(dock.settingsOpen, true);
         keyClick(Qt.Key_Escape);
         dock.pointerX = dock.rowX + dock.slotSize * 5.5;
@@ -744,7 +761,7 @@ TestCase {
         dock.autoHide = false;
         const original = dock.order.slice();
         compare(dock.keyboardActive, false);
-        mousePress(dock, dock.rowX + dock.slotSize * 1.5, dock.rowY + 22);
+        mousePress(dock, dock.rowX + dock.slotSize * 2.5, dock.rowY + 22);
         mouseMove(dock, dock.rowX + 150, dock.rowY + 22);
         compare(dock.dragActive, true);
         verify(dock.wantsKeyboard, "drag takes transient ownership");
@@ -776,9 +793,9 @@ TestCase {
     function test_contextMenuIsInertAndLocksVisibility() {
         dock.autoHide = false;
         verify(typeof dock.openContext === "function", "inert context menu exists");
-        const x = dock.rowX + dock.slotSize * 1.5;
+        const x = dock.rowX + dock.slotSize * 2.5;
         mouseClick(dock, x, dock.rowY + 22, Qt.RightButton);
-        compare(dock.contextIndex, 1);
+        compare(dock.contextIndex, 2);
         compare(dock.selection, "");
         compare(dock.wantsKeyboard, true);
         dock.autoHide = true;
@@ -789,6 +806,7 @@ TestCase {
         compare(dock.contextIndex, -1);
         compare(dock.wantsKeyboard, false);
         dock.enterKeyboard();
+        keyClick(Qt.Key_Right);
         keyClick(Qt.Key_Right);
         keyClick(Qt.Key_Menu);
         compare(dock.contextIndex, dock.focusIndex);
@@ -812,10 +830,10 @@ TestCase {
         dock.reducedMotion = true;
         dock.motionMode = "off";
         const original = dock.order.slice();
-        const menuX = dock.rowX + dock.slotSize * 1.5;
+        const menuX = dock.rowX + dock.slotSize * 2.5;
         const rowY = dock.rowY + 22;
         mouseClick(dock, menuX, rowY, Qt.RightButton);
-        compare(dock.contextIndex, 1);
+        compare(dock.contextIndex, 2);
         const card = findChild(dock, "context-card");
         verify(card !== null && card.visible);
         const x = card.x + data.x;
@@ -833,7 +851,7 @@ TestCase {
         compare(dock.selection, "", "covered row must not select an item");
         compare(dock.order, original, "covered row must not reorder items");
         compare(dock.pressedIndex, -1);
-        compare(dock.contextIndex, 1, "card background must not dismiss the menu");
+        compare(dock.contextIndex, 2, "card background must not dismiss the menu");
         // Child buttons must remain above the card's pointer barrier.
         mouseClick(dock, card.x + 187, card.y + 62);
         compare(dock.contextIndex, -1);

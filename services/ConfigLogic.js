@@ -50,7 +50,7 @@ function parse(text) {
         const fields = c.version === 1 ? ["version", "pins"] : ["version", "pins", "launchers", "settings", "overrides"];
         if (Object.keys(c).some(k => fields.indexOf(k) === -1)) throw new Error("Unsupported configuration field");
         if (!Array.isArray(c.pins) || c.pins.length > 256 || c.pins.some((id, i) =>
-            typeof id !== "string" || !id || id.length > 512 || id === "menu" || id === "." || id === ".." || id.startsWith("launcher:")
+            typeof id !== "string" || !id || id.length > 512 || id === "menu" || id === "omarchy-menu" || id === "." || id === ".." || id.startsWith("launcher:")
             || /[\/\\\x00-\x1f]/.test(id) || c.pins.indexOf(id) !== i)) throw new Error("Invalid pins list");
         const result = defaults();
         result.pins = c.pins;

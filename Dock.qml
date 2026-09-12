@@ -251,7 +251,8 @@ Item {
         return Quickshell.iconPath("application-x-executable", true);
     }
     readonly property var controlIcons: ({
-        menu: themedIcon(["preferences-system", "configure", "start-here"])
+        menu: themedIcon(["preferences-system", "configure", "start-here"]),
+        "omarchy-menu": themedIcon(["omarchy", "start-here", "application-menu", "open-menu"])
     })
     Variants {
         id: surfaces

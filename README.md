@@ -10,7 +10,7 @@ Plugin id: `burmjohn.omadocked`.
 
 ## What it does
 
-Omadocked is a bottom shelf overlay for Hyprland and Omarchy. It shows pinned and running apps, optional folders, and custom launchers, plus a hover window fan with still previews. Settings cover icon size, transparency, magnification, auto-hide, and which outputs show the dock.
+Omadocked is a bottom shelf overlay for Hyprland and Omarchy. It shows pinned and running apps, optional folders, and custom launchers, plus a hover window fan with still previews. The Omarchy menu sits left of Settings. Settings cover icon size, transparency, magnification, auto-hide, and which outputs show the dock. The panel opens in place; click outside it to close.
 
 Click-to-minimize can be off, the active window, or all windows of an app.
 
@@ -19,10 +19,11 @@ Settings and pins are stored in `~/.config/omadocked/pins.json`.
 ## Features
 
 - Bottom shelf on the displays you choose
+- Omarchy menu left of Settings (toggles the default Omarchy menu)
+- Settings for size, transparency, auto-hide, and outputs; click outside to close
 - Wave or zoom magnification, or motion off
 - Pins, running apps, folders, and optional names
 - Hover window fan with still previews
-- Settings for size, transparency, auto-hide, and outputs
 - Custom launchers: apps, commands, links, and folders
 - Click-to-minimize: active window, all windows, or off
 
@@ -59,7 +60,7 @@ Please include Omarchy and Quickshell versions and steps to reproduce. Do not at
 - `python3` and `python-gobject` for desktop-entry launches
 - `xdg-terminal-exec` only if you use command-in-terminal items
 
-Version is `0.1.2` in [`manifest.json`](manifest.json). See [CHANGELOG.md](CHANGELOG.md).
+Version is `0.1.3` in [`manifest.json`](manifest.json). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Development
 

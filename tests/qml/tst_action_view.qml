@@ -24,13 +24,13 @@ TestCase {
         dock.desktopActions = {alpha: actions()};
         actionSpy.target = dock; actionSpy.clear();
         dock.applications = [{id: "alpha", name: "Alpha", pinned: true, canPin: true, running: false}];
-        dock.openContext(1);
+        dock.openContext(2);
         const context = findChild(dock, "context-desktop-actions");
         verify(context !== null && context.visible);
         compare(context.text, "App actions…");
         mouseClick(context);
         verify(dock.desktopActionsOpen); verify(dock.wantsKeyboard);
-        compare(dock.contextIndex, 1);
+        compare(dock.contextIndex, 2);
         compare(dock.desktopActionSelectionId, "exact-One");
         compare(actionSpy.count, 0);
         const row = findChild(dock, "desktop-action-two");
@@ -57,9 +57,9 @@ TestCase {
         keyClick(Qt.Key_Return); compare(actionSpy.count, 0);
         keyClick(Qt.Key_Up); compare(dock.desktopActionSelectionId, "exact-One");
         keyClick(Qt.Key_Tab); keyClick(Qt.Key_Return);
-        verify(!dock.desktopActionsOpen); compare(dock.contextIndex, 1);
+        verify(!dock.desktopActionsOpen); compare(dock.contextIndex, 2);
         verify(dock.openDesktopActions("alpha")); keyClick(Qt.Key_Backspace);
-        verify(!dock.desktopActionsOpen); compare(dock.contextIndex, 1);
+        verify(!dock.desktopActionsOpen); compare(dock.contextIndex, 2);
         verify(dock.openDesktopActions("alpha")); keyClick(Qt.Key_Escape);
         compare(dock.contextIndex, -1);
         verify(dock.openDesktopActions("alpha")); keyClick(Qt.Key_Return);
@@ -91,7 +91,7 @@ TestCase {
         verify(!findChild(dock, "desktop-action-exact-One").enabled);
         keyClick(Qt.Key_Return); compare(actionSpy.count, 0);
         compare(dock.appStatus, "Opening alpha…");
-        dock.releaseInteractions(); dock.openContext(1);
+        dock.releaseInteractions(); dock.openContext(2);
         const button = findChild(dock, "context-desktop-actions");
         verify(button.visible); verify(!button.enabled);
         compare(dock.openDesktopActions("alpha"), false);
@@ -99,7 +99,7 @@ TestCase {
             dock.applications = [entry];
             const map = {}; map[entry.id] = actions(); dock.desktopActions = map;
             compare(dock.openDesktopActions(entry.id), false);
-            dock.openContext(1); verify(!findChild(dock, "context-desktop-actions").visible);
+            dock.openContext(2); verify(!findChild(dock, "context-desktop-actions").visible);
         }
         compare(dock.openDesktopActions("missing"), false);
         compare(dock.openDesktopActions("menu"), false);
@@ -123,7 +123,7 @@ TestCase {
         dock.desktopActions = {alpha: many.slice(0, 90)};
         compare(dock.popupRect, rect);
         mouseClick(findChild(dock, "desktop-actions-back"));
-        verify(!dock.desktopActionsOpen); compare(dock.contextIndex, 1);
+        verify(!dock.desktopActionsOpen); compare(dock.contextIndex, 2);
         dock.desktopActions = {alpha: actions()}; verify(dock.openDesktopActions("alpha"));
         const smallRect = dock.popupRect; verify(smallRect.height <= 190);
         dock.desktopActions = {alpha: many}; compare(dock.popupRect, smallRect);

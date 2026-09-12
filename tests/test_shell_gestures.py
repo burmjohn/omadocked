@@ -81,25 +81,24 @@ HANDLER
                         except RuntimeError: pass
                         self.assertLess(time.monotonic(),deadline)
                         time.sleep(.03)
-                    self.assertEqual(call('click',1),{'pressed':True,'settings':True})
-                    self.assertTrue(call('closeSettings'))
+                    self.assertEqual(call('click',1),{'pressed':True,'settings':False})
                     self.assertEqual(call('click',4),{'pressed':True,'settings':False})
                     self.assertTrue(call('gesture','left',1))
                     call('wheel',-120); call('wheel',120)
                     deadline=time.monotonic()+3
-                    while not receipts.exists() or len(receipts.read_text().splitlines())<4:
+                    while not receipts.exists() or len(receipts.read_text().splitlines())<5:
                         self.assertLess(time.monotonic(),deadline); time.sleep(.02)
-                    expected=[['omarchy-menu','toggle','root'],['omarchy-launch-terminal'],
+                    expected=[['omarchy-menu','toggle','root'],['omarchy-menu','toggle','root'],['omarchy-launch-terminal'],
                               ['hyprctl','eval','hl.dsp.focus({ workspace = "e+1" })'],
                               ['hyprctl','eval','hl.dsp.focus({ workspace = "e-1" })']]
                     self.assertCountEqual([json.loads(l) for l in receipts.read_text().splitlines()],expected)
-                    self.assertEqual(call('click',2),{'pressed':True,'settings':True})
+                    self.assertEqual(call('click',2),{'pressed':True,'settings':False})
                     for kind,delta in [('wheel',0),('wheel',float('nan')),('bad',0),('right',0)]:
                         self.assertFalse(call('gesture',kind,delta))
                     call('block','true')
                     self.assertFalse(call('gesture','left',0)); self.assertFalse(call('gesture','wheel',120))
                     time.sleep(.08)
-                    self.assertEqual(len(receipts.read_text().splitlines()),4)
+                    self.assertEqual(len(receipts.read_text().splitlines()),5)
                 finally:
                     proc.terminate()
                     try: proc.wait(timeout=5)
