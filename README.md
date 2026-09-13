@@ -16,6 +16,8 @@ Click-to-minimize can be off, the active window, or all windows of an app.
 
 Settings and pins are stored in `~/.config/omadocked/pins.json`.
 
+On a user-owned Omarchy tree (`OMARCHY_PATH` under `~/.local/share/omadocked/omarchy`), idle lock helpers must inherit that path. A login shell (`bash -lc`) resets `OMARCHY_PATH` to `/usr/share/omarchy`, so the locker never engages and a keypress only dismisses the screensaver. See [docs/idle-lock.md](docs/idle-lock.md).
+
 ## Features
 
 - Bottom shelf on the displays you choose
@@ -60,7 +62,7 @@ Please include Omarchy and Quickshell versions and steps to reproduce. Do not at
 - `python3` and `python-gobject` for desktop-entry launches
 - `xdg-terminal-exec` only if you use command-in-terminal items
 
-Version is `0.1.3` in [`manifest.json`](manifest.json). See [CHANGELOG.md](CHANGELOG.md).
+Version is `0.1.4` in [`manifest.json`](manifest.json). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Development
 
