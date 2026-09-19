@@ -1,10 +1,16 @@
 # Changelog
 
+## 0.1.5 — 2026-09-19
+
+Omadocked is a dock plugin. Stop documenting or testing a host Omarchy overlay
+under `~/.local/share/omadocked/omarchy`. Idle and lock stay on packaged
+Omarchy (`/usr/share/omarchy`).
+
 ## 0.1.4 — 2026-09-13
 
 Idle lock on the Omadocked host overlay inherits `OMARCHY_PATH` (`bash -c`
 instead of a login shell), so `omarchy-system-lock` reaches the running locker
-instead of no-op'ing against stock omarchy-shell. See [docs/idle-lock.md](docs/idle-lock.md).
+instead of no-op'ing against stock omarchy-shell. Superseded in 0.1.5.
 
 ## 0.1.3 — 2026-09-12
 
