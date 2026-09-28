@@ -55,7 +55,29 @@ BINDINGS
 '''.replace('MEMBERS', members).replace('BINDINGS', bindings))
         shell = shell.replace('function configure(data: string): bool { return apps.configure(JSON.parse(data)); }', '''function configure(data: string): bool {
             view.settingsOpen = true; input.wait(30);
-            const button = input.findChild(input.findChild(view, "settings-popup").contentItem, data);
+            const content = input.findChild(view, "settings-popup").contentItem;
+            if (data.startsWith("{")) {
+                const patch = JSON.parse(data), key = Object.keys(patch)[0];
+                if (!view.badgeSettingsOpen) {
+                    const expand = input.findChild(content, "badge-settings");
+                    expand.forceActiveFocus(); input.keyClick(Qt.Key_Space);
+                }
+                if (key === "badgePosition") {
+                    const choice = input.findChild(content, "badge-" + patch[key]);
+                    if (!choice) return false;
+                    choice.forceActiveFocus(); input.keyClick(Qt.Key_Space);
+                    return true;
+                }
+                const name = key === "badgeBackgroundColor" ? "badge-background-color"
+                    : key === "badgeTextColor" ? "badge-text-color" : "";
+                const field = name ? input.findChild(content, name) : null;
+                if (!field) return false;
+                field.forceActiveFocus(); field.text = patch[key];
+                const valid = field.acceptableInput;
+                input.keyClick(Qt.Key_Return);
+                return valid;
+            }
+            const button = input.findChild(content, data);
             if (!button) return false;
             button.forceActiveFocus();
             if (data === "background-color") { input.keyClick(Qt.Key_Space); input.keyClick(Qt.Key_Down); input.keyClick(Qt.Key_Return); }
@@ -114,6 +136,30 @@ BINDINGS
         self.assertEqual(f.call('appearance')['itemSpacing'], 8)
         self.assertEqual(json.loads(f.config.read_text()), saved)
         self.assertTrue(f.call('controlState')['relaxed'])
+
+    def test_badge_controls_persist_restart_and_reject_invalid_values(self):
+        f = self.fixture
+        env = {'QT_QPA_PLATFORM': 'offscreen', 'QT_QUICK_BACKEND': 'software',
+               'XDG_RUNTIME_DIR': str(f.root)}
+        f.start(test_mode='0', extra_env=env)
+        for patch in ({'badgePosition': 'top-left'}, {'badgeBackgroundColor': '#112233'},
+                      {'badgeTextColor': '#eeaa44'}):
+            self.assertTrue(f.call('configure', json.dumps(patch)))
+        self.assertTrue(f.config.exists(), f.call('snapshot'))
+        saved = json.loads(f.config.read_text())
+        self.assertEqual(saved['settings']['badgePosition'], 'top-left')
+        self.assertEqual(saved['settings']['badgeBackgroundColor'], '#112233')
+        self.assertEqual(saved['settings']['badgeTextColor'], '#eeaa44')
+        f.stop(); f.start(test_mode='0', extra_env=env)
+        self.assertEqual(f.call('appearance')['badgePosition'], 'top-left')
+        self.assertEqual(f.call('appearance')['badgeBackgroundColor'], '#112233')
+        self.assertEqual(f.call('appearance')['badgeTextColor'], '#eeaa44')
+        self.assertFalse(f.call('configure', json.dumps({'badgeTextColor': 'red'})))
+        self.assertEqual(json.loads(f.config.read_text()), saved)
+        f.config.chmod(0o444)
+        self.assertFalse(f.call('configure', json.dumps({'badgePosition': 'bottom-left'})))
+        self.assertEqual(f.call('appearance')['badgePosition'], 'top-left')
+        self.assertEqual(json.loads(f.config.read_text()), saved)
 
     def test_shape_control_restart_and_rejection(self):
         f = self.fixture

@@ -10,7 +10,8 @@ import "../core/GestureLogic.js" as Gestures
 // Pure presentation: applications arrive from the shared service; actions are signals only.
 FocusScope {
     id: root
-    property var appearanceSettings: ({shape:"rounded", itemSpacing:4, backgroundColor:"theme", themeOpacity:false})
+    property var appearanceSettings: ({shape:"rounded", itemSpacing:4, backgroundColor:"theme", themeOpacity:false,
+        badgePosition:"bottom-right", badgeBackgroundColor:"theme", badgeTextColor:"theme"})
     readonly property string backgroundColor: appearanceSettings.backgroundColor || "theme"
     readonly property bool themeOpacity: appearanceSettings.themeOpacity === true
     readonly property int itemSpacing: appearanceSettings.itemSpacing === undefined ? 4 : appearanceSettings.itemSpacing
@@ -123,6 +124,7 @@ FocusScope {
         monitorsRequested("selected", names);
     }
     property bool settingsOpen: false
+    property bool badgeSettingsOpen: false
     property bool editorOpen: false
     property var launcherRecords: []
     property var desktopEntries: []
@@ -167,6 +169,7 @@ FocusScope {
             if (popupGestureBusy) beginPopupSettle()
             else popupSettling = false
         } else {
+            badgeSettingsOpen = false
             if (contextIndex < 0) { popupSettling = false; popupSettleTimer.stop() }
             editorOpen = false
             sizeSlider.cancelPreview()
@@ -224,6 +227,30 @@ FocusScope {
         onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
             root.appearanceSettingsRequested(requestPatch)
         Accessible.onPressAction: root.appearanceSettingsRequested(requestPatch)
+    }
+    component BadgeColorField: TextField {
+        id: field
+        required property string settingKey
+        readonly property string savedColor: root.appearanceSettings[settingKey] || "theme"
+        text: savedColor
+        height: 30
+        color: root.textColor
+        selectByMouse: true
+        maximumLength: 7
+        validator: RegularExpressionValidator { regularExpression: /(?:theme|#[0-9a-fA-F]{6})/ }
+        background: Rectangle {
+            radius: 6
+            color: Qt.alpha(root.shelfColor, .5)
+            border.width: field.activeFocus ? 2 : 1
+            border.color: field.activeFocus ? root.accentColor : Qt.alpha(root.textColor, .35)
+        }
+        onAccepted: {
+            const patch = {};
+            patch[settingKey] = text;
+            root.appearanceSettingsRequested(patch);
+            text = Qt.binding(() => savedColor);
+        }
+        onActiveFocusChanged: if (!activeFocus) text = Qt.binding(() => savedColor)
     }
     component PreviewSlider: Slider {
         id: control
@@ -1044,7 +1071,8 @@ FocusScope {
                 Accessible.onPressAction: root.selectIndex(slot.index)
                 AttentionIndicator {
                     objectName: "attention-" + slot.modelData
-                    anchors.right: art.right
+                    anchors.left: slot.windowCount > 1 && root.appearanceSettings.badgePosition === "top-right" ? art.left : undefined
+                    anchors.right: slot.windowCount > 1 && root.appearanceSettings.badgePosition === "top-right" ? undefined : art.right
                     anchors.top: art.top
                     z: 2
                     attention: root.attentionApps.indexOf(slot.modelData) >= 0
@@ -1121,17 +1149,22 @@ FocusScope {
                     visible: slot.windowCount > 1
                     text: slot.windowCount > 99 ? "99+" : String(slot.windowCount)
                     width: 24; height: 15
-                    x: (parent.width + root.baseIconSize) / 2 - width
-                    y: root.baseIconSize - height
+                    x: (parent.width + ((root.appearanceSettings.badgePosition || "bottom-right").endsWith("left") ? -root.baseIconSize : root.baseIconSize)) / 2
+                        - ((root.appearanceSettings.badgePosition || "bottom-right").endsWith("left") ? 0 : width)
+                    y: (root.appearanceSettings.badgePosition || "bottom-right").startsWith("top") ? 0 : root.baseIconSize - height
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     textFormat: Text.PlainText
-                    color: root.textColor; font.pixelSize: 10; font.weight: Font.DemiBold
+                    color: root.appearanceSettings.badgeTextColor && root.appearanceSettings.badgeTextColor !== "theme"
+                        ? root.appearanceSettings.badgeTextColor : root.textColor
+                    font.pixelSize: 10; font.weight: Font.DemiBold
                     Accessible.ignored: true
                     Rectangle {
                         anchors.fill: parent; z: -1; radius: 6
-                        color: Qt.rgba(root.shelfColor.r, root.shelfColor.g, root.shelfColor.b, 0.94)
-                        border.color: Qt.alpha(root.textColor, 0.22)
+                        color: root.appearanceSettings.badgeBackgroundColor && root.appearanceSettings.badgeBackgroundColor !== "theme"
+                            ? root.appearanceSettings.badgeBackgroundColor
+                            : Qt.rgba(root.shelfColor.r, root.shelfColor.g, root.shelfColor.b, 0.94)
+                        border.color: Qt.alpha(parent.color, 0.22)
                     }
                 }
                 WindowIndicators {
@@ -1569,7 +1602,7 @@ FocusScope {
                     width: parent.width; spacing: 4
                     ComboBox {
                         id: backgroundPicker; objectName: "background-color"
-                        width: (delaySettings.width - 4) * .57; height: 30
+                        width: (delaySettings.width - 8) * .46; height: 30
                         model: ["theme", "none", "#000000", "#181825", "#1e1e2e", "#0f172a", "#111827", "#062e24", "#1c1917", "#2c0b16", "#1e102d", "#334155"]
                         currentIndex: model.indexOf(root.backgroundColor)
                         displayText: root.backgroundColor === "none" ? "Black 25% (none)" : "Color: " + root.backgroundColor
@@ -1587,11 +1620,60 @@ FocusScope {
                         }
                     }
                     AppearanceButton {
-                        objectName: "theme-opacity"; width: (delaySettings.width - 4) * .43
-                        text: "Theme opacity"; chosen: root.themeOpacity
+                        objectName: "theme-opacity"; width: (delaySettings.width - 8) * .32
+                        text: width < 112 ? "Theme α" : "Theme opacity"; chosen: root.themeOpacity
                         Accessible.name: "Use host theme opacity; retain explicit transparency"
                         requestPatch: ({themeOpacity:!root.themeOpacity})
                     }
+                    TuneButton {
+                        objectName: "badge-settings"; width: (delaySettings.width - 8) * .22
+                        text: "Badges"; chosen: root.badgeSettingsOpen
+                        Accessible.name: "Show window count badge appearance settings"
+                        onClicked: root.badgeSettingsOpen = !root.badgeSettingsOpen
+                    }
+                }
+                Column {
+                    id: badgeControls
+                    objectName: "badge-controls"
+                    width: parent.width; spacing: 4
+                    visible: root.badgeSettingsOpen
+                    Text { text: "Window count badge"; color: root.textColor; font.pixelSize: 13; textFormat: Text.PlainText }
+                Row {
+                    width: parent.width; spacing: 4
+                    Repeater {
+                        model: ["top-left", "top-right", "bottom-left", "bottom-right"]
+                        delegate: AppearanceButton {
+                            required property string modelData
+                            objectName: "badge-" + modelData
+                            width: (delaySettings.width - 12) / 4
+                            text: modelData.replace("top", "T").replace("bottom", "B").replace("left", "L").replace("right", "R")
+                            chosen: (root.appearanceSettings.badgePosition || "bottom-right") === modelData
+                            Accessible.name: "Badge position: " + modelData.replace("-", " ")
+                            requestPatch: ({badgePosition:modelData})
+                        }
+                    }
+                }
+                Row {
+                    width: parent.width; spacing: 4
+                    Column {
+                        width: (delaySettings.width - 4) / 2; spacing: 2
+                        Text { width: parent.width; text: "Badge background (theme or #RRGGBB)"; elide: Text.ElideRight
+                            color: root.textColor; font.pixelSize: 11; textFormat: Text.PlainText }
+                        BadgeColorField {
+                            objectName: "badge-background-color"; settingKey: "badgeBackgroundColor"
+                            width: parent.width; Accessible.name: "Badge background color, theme or six digit hex"
+                        }
+                    }
+                    Column {
+                        width: (delaySettings.width - 4) / 2; spacing: 2
+                        Text { width: parent.width; text: "Badge text (theme or #RRGGBB)"; elide: Text.ElideRight
+                            color: root.textColor; font.pixelSize: 11; textFormat: Text.PlainText }
+                        BadgeColorField {
+                            objectName: "badge-text-color"; settingKey: "badgeTextColor"
+                            width: parent.width; Accessible.name: "Badge text color, theme or six digit hex"
+                        }
+                    }
+                }
                 }
                 Text { text: "Tooltip delay: " + root.tooltipDelay + " ms"; color: root.textColor; font.pixelSize: 13 }
                 PreviewSlider {
