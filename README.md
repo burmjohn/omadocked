@@ -10,7 +10,7 @@ Plugin id: `burmjohn.omadocked`.
 
 ## What it does
 
-Omadocked is a bottom shelf overlay for Hyprland and Omarchy. It shows pinned and running apps, optional folders, and custom launchers, plus a hover window fan with still previews. The Omarchy menu sits left of Settings. Settings cover icon size, transparency, magnification, auto-hide, and which outputs show the dock. The panel opens in place; click outside it to close.
+Omadocked is a bottom shelf overlay for Hyprland and Omarchy. It shows pinned and running apps, optional folders, and custom launchers, plus a hover window fan with still previews. The Omarchy menu sits left of Settings. Settings cover icon size, transparency, magnification, auto-hide, outputs, and window-count badges (four corners plus theme or `#RRGGBB` background/text colors). Open **Badges** in Settings to edit them; press Enter to save a color. The panel opens in place; click outside it to close.
 
 Click-to-minimize can be off, the active window, or all windows of an app.
 

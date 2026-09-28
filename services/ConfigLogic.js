@@ -5,7 +5,8 @@
 
 function defaults() {
     return {version: 2, pins: [], launchers: [], settings: {iconSize: 44, transparency: 0, shape: "rounded", itemSpacing: 4,
-        backgroundColor: "theme", themeOpacity: false, zoomSize: 145, waveWidth: 25,
+        backgroundColor: "theme", themeOpacity: false, badgePosition: "bottom-right",
+        badgeBackgroundColor: "theme", badgeTextColor: "theme", zoomSize: 145, waveWidth: 25,
         motionMode: "wave", reducedMotion: false, showAppNames: true, advancedTooltips: false, launchBounce: true, tooltipDelay:450, revealDelay:160, autoHide: true, intelligentHide: false, minimizeMode: "active",
         reserveSpace: false, followActiveOutput: false, monitorMode: "all", selectedOutputs: [], folderColor: "theme",
         previewsEnabled: true, livePreviews: false, showUrgentHint:true, urgentOnNotification:true,
@@ -28,6 +29,8 @@ function settings(patch, base) {
         else if (k === "shape") valid = ["rounded", "round", "square", "theme"].indexOf(v) !== -1;
         else if (k === "itemSpacing") valid = [2, 4, 8].indexOf(v) !== -1;
         else if (k === "backgroundColor") valid = typeof v === "string" && (v === "theme" || v === "none" || /^#[0-9a-fA-F]{6}$/.test(v));
+        else if (k === "badgePosition") valid = ["top-left", "top-right", "bottom-left", "bottom-right"].indexOf(v) !== -1;
+        else if (k === "badgeBackgroundColor" || k === "badgeTextColor") valid = typeof v === "string" && (v === "theme" || /^#[0-9a-fA-F]{6}$/.test(v));
         else if (k === "themeOpacity") valid = typeof v === "boolean";
         else if (k === "motionMode") valid = ["wave", "zoom", "off"].indexOf(v) !== -1;
         else if (k === "minimizeMode") valid = ["active", "all", "off"].indexOf(v) !== -1;
