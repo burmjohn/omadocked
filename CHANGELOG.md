@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 — 2026-09-28
+
+Window-count badges can be placed in any icon corner and have independently
+configurable background and text colors (`theme` or `#RRGGBB`). The choices
+persist in Settings → Badges. The attention dot moves out of the way when a
+badge occupies the top-right corner.
+
 ## 0.1.5 — 2026-09-19
 
 Omadocked is a dock plugin. Stop documenting or testing a host Omarchy overlay
