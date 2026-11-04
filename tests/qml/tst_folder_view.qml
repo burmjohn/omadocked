@@ -22,6 +22,47 @@ TestCase {
         openSpy.target = view; openSpy.clear(); launchSpy.target = view; launchSpy.clear();
         return view;
     }
+    function test_short_output_contains_last_folder_row_and_controls() {
+        const view = createView();
+        view.availableHeight = 400;
+        view.folderResult = {complete:true, entries:Array.from({length:16}, (_, i) => ({path:"/owned/"+i, label:"Owned "+i, type:"file", size:4, relativeTime:"now"}))};
+        view.selectId(idA);
+        const chooser = view.activeFolderChooser;
+        const card = findChild(view, "context-card");
+        verify(card.y + card.height <= view.height - view.dockHeight, "chooser stays above reserved shelf envelope");
+        const list = findChild(chooser, "folder-list");
+        verify(list.height >= 52);
+        for (let i=0; i<16; ++i) chooser.handleKey(Qt.Key_Down, 0);
+        list.forceLayout();
+        compare(chooser.selectionPath, "/owned/15");
+        const row = list.itemAtIndex(15);
+        verify(row !== null);
+        const point = row.mapToItem(view, 0, 0);
+        verify(point.y >= card.y && point.y + row.height <= card.y + card.height);
+        const close = findChild(chooser, "folder-close");
+        mouseClick(close);
+        compare(view.folderChooserOpen, false);
+    }
+    function test_firstUpSelectsLast() {
+        const view = createView();
+        const entries = ["a", "b", "c"].map(name => ({path:"/owned/" + name, label:name, type:"file", size:0, relativeTime:"now"}));
+        view.folderResult = {entries:entries};
+        view.selectId(idA);
+        const chooser = view.activeFolderChooser;
+        chooser.handleKey(Qt.Key_Up, Qt.NoModifier);
+        compare(chooser.selectionPath, "/owned/c");
+        view.folderResult = {entries:entries.slice(0, 2)};
+        compare(chooser.selectionPath, "");
+        chooser.handleKey(Qt.Key_Up, Qt.NoModifier);
+        compare(chooser.selectionPath, "/owned/b");
+        view.folderResult = {entries:entries.slice(0, 1)};
+        chooser.handleKey(Qt.Key_Up, Qt.NoModifier);
+        compare(chooser.selectionPath, "/owned/a");
+        view.folderResult = {entries:[]};
+        chooser.handleKey(Qt.Key_Up, Qt.NoModifier);
+        compare(chooser.selectionPath, "");
+        compare(launchSpy.count, 0);
+    }
     function test_primary_opens_toggles_and_never_directly_launches() {
         const view = createView();
         view.selectId(idA);

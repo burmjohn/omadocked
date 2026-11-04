@@ -144,13 +144,14 @@ else:sys.exit(2)
                                 "floating":row["floating"],"at":row["at"],"size":row["size"]}})
         self.assertTrue(self.call("seed",json.dumps({"entries":entries,"windows":windows})))
         return self.call("snapshot")
-    def wait_revision(self,before,count=1):
-        deadline=time.monotonic()+5
+    def wait_revision(self,before,count=1,timeout=5):
+        deadline=time.monotonic()+timeout
+        state={}
         while time.monotonic()<deadline:
             state=self.call("snapshot")
             if state["revision"]>=before+count and not state["parkingBusy"]:return state
             time.sleep(.03)
-        self.fail("parking receipt timeout")
+        raise AssertionError("parking receipt timeout: " + repr(state))
 
     def wait_mode(self,mode):
         deadline=time.monotonic()+4

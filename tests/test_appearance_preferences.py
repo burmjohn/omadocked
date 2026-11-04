@@ -16,10 +16,10 @@ class AppearancePreferences(unittest.TestCase):
         (f.root / 'Commons/qmldir').write_text('singleton Style 1.0 Style.qml\nsingleton Color 1.0 Color.qml\n')
         (f.root / 'Commons/Style.qml').write_text('pragma Singleton\nimport QtQuick\nQtObject { property int cornerRadius: 13 }\n')
         (f.root / 'Commons/Color.qml').write_text('pragma Singleton\nimport QtQuick\nQtObject { property QtObject bar: QtObject { property color background: "#80402010" } }\n')
-        shell = service.SHELL.replace('import QtQuick', 'import QtQuick\nimport qs.Commons', 1)
+        shell = service.SHELL.replace('import QtQuick', 'import QtQuick\nimport qs.Commons as Commons', 1)
         shell = shell.replace('    id: probe', '    id: probe\n    Loader { id: theme; source: "host/Appearance.qml" }')
         shell = shell.replace('function configure(data: string): bool { return apps.configure(JSON.parse(data)); }', '''function tokens(): string { return JSON.stringify({radius:theme.item.cornerRadius, alpha:theme.item.background.a}); }
-        function themeChange(): bool { Style.cornerRadius = 0; Color.bar.background = Qt.rgba(.2,.3,.4,.25); return true; }''')
+        function themeChange(): bool { Commons.Style.cornerRadius = 0; Commons.Color.bar.background = Qt.rgba(.2,.3,.4,.25); return true; }''')
         (f.root / 'shell.qml').write_text(shell)
         f.start(extra_env={'QT_QPA_PLATFORM':'offscreen', 'QT_QUICK_BACKEND':'software'})
         self.assertEqual(f.call('tokens')['radius'], 13)

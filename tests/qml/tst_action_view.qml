@@ -90,7 +90,7 @@ TestCase {
         dock.applications = [{id: "alpha", name: "Private application name", pending: true}];
         verify(!findChild(dock, "desktop-action-exact-One").enabled);
         keyClick(Qt.Key_Return); compare(actionSpy.count, 0);
-        compare(dock.appStatus, "Opening alpha…");
+        compare(dock.appStatus, "Opening Private application name…");
         dock.releaseInteractions(); dock.openContext(2);
         const button = findChild(dock, "context-desktop-actions");
         verify(button.visible); verify(!button.enabled);
@@ -169,11 +169,13 @@ TestCase {
             dock.iconSize = size; dock.motionMode = mode;
             const slot = findChild(dock, "item-alpha");
             const rect = Qt.rect(slot.x, slot.y, slot.width, slot.height);
-            const badgeWidth = badge.width;
             for (const count of [0, 1, 2, 99, 100, 1234]) {
                 dock.applications = [app(count)];
                 compare(badge.visible, count > 1);
-                compare(badge.width, badgeWidth);
+                if (size <= 32) {
+                    verify(badge.width >= 14 && badge.width <= size);
+                    verify(badge.width >= badge.contentWidth + 4);
+                } else compare(badge.width, 24);
                 compare(Qt.rect(slot.x, slot.y, slot.width, slot.height), rect);
                 if (count > 1) {
                     compare(badge.text, count > 99 ? "99+" : String(count));

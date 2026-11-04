@@ -65,7 +65,7 @@ TestCase {
         const recoverHere=findChild(dock,"recover-parked-here");
         const recoverOrigin=findChild(dock,"recover-parked-origin");
         verify(recoverHere.visible && recoverOrigin.visible);
-        recoverHere.clicked(); recoverOrigin.clicked();
+        recoverHere.Accessible.pressAction(); recoverOrigin.Accessible.pressAction();
         compare(recoverParkedSpy.signalArguments[0][0],"here");
         compare(recoverParkedSpy.signalArguments[1][0],"origin");
         minimizeSpy.target=null;restoreSpy.target=null;recoverParkedSpy.target=null;
@@ -79,7 +79,7 @@ TestCase {
         verify(active !== null && all !== null && off !== null);
         dock.minimizeMode = "active";
         verify(active.chosen); verify(!all.chosen); verify(!off.chosen);
-        all.clicked(); off.clicked(); active.clicked();
+        all.Accessible.pressAction(); off.Accessible.pressAction(); active.Accessible.pressAction();
         compare(minimizeModeSpy.count, 3);
         compare(minimizeModeSpy.signalArguments[0][0], "all");
         compare(minimizeModeSpy.signalArguments[1][0], "off");
@@ -96,7 +96,7 @@ TestCase {
         findChild(dock, "override-app-id").text = "org.Example.PWA";
         verify(clear.enabled);
         compare(overrideSpy.count, 0);
-        clear.clicked();
+        clear.Accessible.pressAction();
         compare(overrideSpy.count, 1);
         compare(overrideSpy.signalArguments[0][0], "org.Example.PWA");
         compare(overrideSpy.signalArguments[0][1], "");
@@ -111,14 +111,14 @@ TestCase {
         recoverSpy.target = dock; recoverSpy.clear(); overrideSpy.target = dock; overrideSpy.clear();
         dock.canRecover = true; dock.appError = "Invalid configuration; original preserved";
         verify(recover.visible); compare(recoverSpy.count, 0);
-        recover.clicked(); compare(recoverSpy.count, 1);
+        recover.Accessible.pressAction(); compare(recoverSpy.count, 1);
         const appId = findChild(dock, "override-app-id");
         const desktopId = findChild(dock, "override-desktop-id");
         const apply = findChild(dock, "apply-override");
         verify(!apply.enabled);
         appId.text = "org.Example.PWA"; desktopId.text = "exact-case.desktop";
         compare(overrideSpy.count, 0); verify(apply.enabled);
-        apply.clicked();
+        apply.Accessible.pressAction();
         compare(overrideSpy.signalArguments[0][0], "org.Example.PWA");
         compare(overrideSpy.signalArguments[0][1], "exact-case.desktop");
         verify(appId.Accessible.name.length > 0); verify(desktopId.Accessible.name.length > 0);
@@ -204,7 +204,7 @@ TestCase {
         tryCompare(art, "status", Image.Ready);
         verify(findChild(dock, "pending-alpha").visible);
         verify(findChild(dock, "app-status").visible);
-        compare(findChild(dock, "app-status-text").text, "Opening alpha…");
+        compare(findChild(dock, "app-status-text").text, "Opening Application alpha…");
         activateSpy.target = dock; activateSpy.clear();
         dock.selectIndex(2);
         compare(activateSpy.count, 0, "pending launch cannot be requested twice");

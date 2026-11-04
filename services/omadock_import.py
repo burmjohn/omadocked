@@ -3,8 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import stat
-import uuid
+from services.config_store import Store
 
 
 UNSUPPORTED_KEYS = {
@@ -14,6 +13,7 @@ UNSUPPORTED_KEYS = {
 }
 
 SETTING_MAP = {
+    "iconSize": "iconSize",
     "autohide": "autoHide",
     "intelligentAutohide": "intelligentHide",
     "minimizeMode": "minimizeMode",
@@ -108,7 +108,7 @@ def _pins(dock_path):
     if isinstance(raw, list):
         for item in raw:
             ident = _strip_desktop(item)
-            if (not ident or ident in seen or ident in (".", "..", "menu") or ident.startswith("launcher:")
+            if (not ident or ident in seen or ident in (".", "..", "menu", "omarchy-menu") or ident.startswith("launcher:")
                     or len(ident) > 512 or "/" in ident or "\\" in ident
                     or any(ord(c) < 32 for c in ident)):
                 continue
@@ -232,39 +232,8 @@ def _config(preview_data):
     }
 
 
-def _exclusive_backup(dest):
-    backup = dest.with_name(dest.name + ".import-bak")
-    if backup.is_symlink() or (backup.exists() and not backup.is_file()):
-        raise ValueError("unsafe backup")
-    parent = os.open(str(backup.parent), os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
-    try:
-        name = backup.name
-        try:
-            info = os.stat(name, dir_fd=parent, follow_symlinks=False)
-        except FileNotFoundError:
-            info = None
-        if info is not None:
-            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-                raise ValueError("unsafe backup")
-            os.unlink(name, dir_fd=parent)
-        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
-                     0o600, dir_fd=parent)
-        try:
-            data = dest.read_bytes()
-            offset = 0
-            while offset < len(data):
-                offset += os.write(fd, data[offset:])
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        os.fsync(parent)
-    finally:
-        os.close(parent)
-    return backup
-
-
 def _valid_pin(ident):
-    return (_printable(ident, 512) and ident and ident not in (".", "..", "menu")
+    return (_printable(ident, 512) and ident and ident not in (".", "..", "menu", "omarchy-menu")
             and not ident.startswith("launcher:") and "/" not in ident and "\\" not in ident)
 
 
@@ -337,17 +306,44 @@ def _validate_destination(config):
 
 
 def apply(dock_path, settings_path, dest_path):
-    dest = Path(dest_path)
+    sources = [Path(p) for p in (dock_path, settings_path) if p is not None]
+    if not sources or any(not p.is_file() for p in sources):
+        raise ValueError("missing import source")
+    for source in sources:
+        if not isinstance(json.loads(source.read_text()), dict):
+            raise ValueError("invalid import source: expected an object")
+    dest = Path(dest_path).absolute()
     if not dest.is_file() or dest.is_symlink() or ".." in dest.parts:
         raise ValueError("unsafe destination")
     preview_data = preview(dock_path, settings_path)
     payload_config = _config(preview_data)
     _validate_destination(payload_config)
-    backup = _exclusive_backup(dest)
     payload = json.dumps(payload_config, indent=2) + "\n"
-    tmp = dest.with_name(".omadocked-import-" + uuid.uuid4().hex)
-    tmp.write_text(payload)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, dest)
-    return {"applied": True, "backup": str(backup), "pins": preview_data["pins"],
-            "unsupported": preview_data["unsupported"]}
+    try:
+        store = Store(str(dest))
+    except BlockingIOError:
+        return {"applied": False, "error": "busy", "outcome": "no-commit"}
+    try:
+        ready = store.ready()
+        if ready["missing"]:
+            raise ValueError("unsafe destination")
+        backup_name = store.name + ".import-bak"
+        try:
+            os.stat(backup_name, dir_fd=store.directory, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise ValueError("import backup already exists; archive it before another import")
+        # Preserve the exact pre-import bytes under the same lease, with the
+        # Store's ownership checks, atomic replacement, fsync and readback.
+        store.atomic_write(backup_name, ready["text"])
+        receipt = store.request({
+            "id": 1, "op": "commit", "expected": ready["text"],
+            "missing": False, "replacement": payload, "fallback": "",
+        })
+        return dict(receipt, applied=bool(receipt.get("ok") and receipt.get("committed")
+                                         and receipt.get("outcome") == "durable"),
+                    backup=str(dest.with_name(backup_name)), pins=preview_data["pins"],
+                    unsupported=preview_data["unsupported"])
+    finally:
+        store.close()

@@ -228,5 +228,91 @@ class FolderServiceTests(unittest.TestCase):
         self.call("open", unreadable)
         self.assertEqual(self.settled()["result"]["status"], "empty")
 
+class FolderFailedStartTests(unittest.TestCase):
+    def test_failed_start_is_bounded_and_reopen_recovers(self):
+        # Own only the Process transport; keep production controller and timer.
+        with tempfile.TemporaryDirectory(prefix="omadocked-folder-start-") as directory:
+            root = Path(directory)
+            for name in ("FolderLogic.js", "LauncherLogic.js"):
+                shutil.copy2(ROOT / "services" / name, root / name)
+            source = (ROOT / "services/FolderService.qml").read_text()
+            source = source.replace("import Quickshell.Io\n", "").replace("import Quickshell\n", "")
+            (root / "FolderService.qml").write_text(source)
+            (root / "Process.qml").write_text('''import QtQuick
+QtObject {
+    property var command: []
+    property bool running: false
+    property bool stdinEnabled: true
+    property QtObject stdout
+    property int attempts: 0
+    property bool failStart: true
+    property int lastSignal: 0
+    signal exited(int code, int status)
+    onRunningChanged: if (running) { attempts++; if (failStart) Qt.callLater(() => running = false); }
+    function write(text) {}
+    function signal(number) { lastSignal = number; }
+}
+''')
+            (root / "StdioCollector.qml").write_text('import QtQuick\nQtObject { property string text: "" }\n')
+            (root / "tst_failed_start.qml").write_text('''import QtQuick
+import QtTest
+TestCase {
+    name: "FolderFailedStart"
+    FolderService { id: folders }
+    function test_failed_start_and_retry() {
+        verify(folders.open("owned", "/owned"));
+        tryCompare(folders, "busy", false, 6500);
+        compare(folders.result.status, "unreadable");
+        verify(folders.result.message.indexOf("Try again") >= 0);
+        verify(folders._active === null);
+        compare(folders._process.attempts, 1);
+        folders.close();
+        verify(folders.open("retry", "/owned"));
+        tryCompare(folders, "busy", false, 6500);
+        compare(folders._process.attempts, 2);
+        compare(folders.result.status, "unreadable");
+        folders.open("old", "/owned");
+        folders.close();
+        folders.open("new", "/new");
+        tryCompare(folders, "busy", false, 12500);
+        compare(folders.launcherId, "new");
+        compare(folders._process.attempts, 4);
+        folders.close();
+        compare(JSON.stringify(folders.result), "{}");
+        // A running child is killed exactly once and fenced until its exit.
+        folders._deadline.interval = 30;
+        folders._process.failStart = false;
+        folders.open("hung", "/hung");
+        tryCompare(folders, "busy", false, 1000);
+        compare(folders._process.lastSignal, 9);
+        verify(folders._retiring);
+        const attempts = folders._process.attempts;
+        folders.open("replacement", "/replacement");
+        compare(folders._process.attempts, attempts);
+        folders._process.exited(9, 1);
+        compare(folders._process.attempts, attempts + 1);
+        compare(folders._active.generation, folders.generation);
+        compare(JSON.stringify(folders.result), "{}");
+        folders._process.running = false;
+        folders._process.exited(1, 0);
+        compare(folders.busy, false);
+        compare(folders.result.status, "unreadable");
+        verify(!folders._deadline.running);
+        folders.close();
+    }
+}
+''')
+            env = dict(safety.fixture_environment(), QT_QPA_PLATFORM="offscreen")
+            proc = safety.spawn(["/usr/lib/qt6/bin/qmltestrunner", "-input", str(root), "-o", "-,txt"], required="offscreen", root=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            try:
+                output, _ = proc.communicate(timeout=35)
+            finally:
+                if proc.poll() is None:
+                    proc.kill(); proc.wait(timeout=3)
+            self.assertEqual(proc.returncode, 0, output)
+            for issue in ("TypeError:", "ReferenceError:", "Binding loop", "Cannot assign"):
+                self.assertNotIn(issue, output)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -44,6 +44,23 @@ TestCase {
         dock.windowGroups = {one:[{key:"a",title:"One"},{key:"b",title:"Two"}]};
         tryCompare(dock,"fanOpen",true,800);
     }
+    function test_metadataChurnPreservesPendingDwell_data() {
+        return [{tag:"other", same:false}, {tag:"hovered", same:true}];
+    }
+    function test_metadataChurnPreservesPendingDwell(data) {
+        hover("one");
+        for (let i = 0; i < 6; ++i) {
+            wait(100);
+            dock.windowGroups = {one:[{key:"a",title:data.same ? "Fixture " + i : "One"}, {key:"b",title:"Two"}],
+                two:[{key:"c",title:"Other " + i}]};
+        }
+        compare(dock.fanApp, "one", "metadata must not restart the same pending dwell");
+        dock.dismissFan(true);
+        hover("two"); hover("one"); wait(100);
+        dock.windowGroups = {one:[{key:"a",title:"Only"}]};
+        wait(300);
+        compare(dock.fanOpen, false, "membership loss still cancels dwell");
+    }
     function test_switch_leave_reenter_latestDwell() {
         dock.windowGroups = {one:dock.windowGroups.one, two:[{key:"c",title:"C"},{key:"d",title:"D"}]};
         hover("one"); wait(100); hover("two"); wait(100);

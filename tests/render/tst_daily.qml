@@ -13,6 +13,7 @@ TestCase {
         const component = Qt.createComponent("../../ui/DockView.qml");
         compare(component.status, Component.Ready, component.errorString());
         dock = component.createObject(test, {autoHide: false, reducedMotion: true, appsManaged: true, settingsManaged: true, persistenceEnabled: true,
+                                             availableWidth: test.width, availableHeight: test.height,
                                              availableOutputs: ["Fixture-A", "Fixture-B", "Fixture-C"]});
         verify(dock !== null);
         dock.x = (test.width - dock.width) / 2;
@@ -31,6 +32,8 @@ TestCase {
     }
     function test_render() {
         verify(waitForRendering(dock));
+        verify(dock.width <= test.width, "fixture must supply its actual available width");
+        verify(dock.height <= test.height, "fixture must supply its actual available height");
         grabImage(test).save("evidence/daily-settings-offscreen.png");
         verify(dock.openItemEditor("launcher:fixture"));
         verify(waitForRendering(dock));

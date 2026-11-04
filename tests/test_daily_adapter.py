@@ -17,6 +17,7 @@ class DailyAdapterTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="omadocked-daily-adapter-")
         self.directory = Path(self.temp.name)
         self.config = self.directory / "pins.json"
+        self.owned_roots = ()
         for filename in ("shell.qml", "Dock.qml", "DockSurface.qml"):
             shutil.copy2(ROOT / filename, self.directory / filename)
         for directory in ("core", "services", "ui"):
@@ -48,7 +49,8 @@ class DailyAdapterTests(unittest.TestCase):
         self.log = (self.directory / "runtime.log").open("w+")
         try:
             self.proc = safety.spawn(["/usr/bin/python3", str(ROOT / "tools/preview.py"), "--", "-n", "-p", str(self.directory / "shell.qml"), "--no-color"],
-                                         required="native", root=self.directory, env=env, stdout=self.log, stderr=subprocess.STDOUT)
+                                         required="native", root=self.directory, owned_roots=self.owned_roots,
+                                         env=env, stdout=self.log, stderr=subprocess.STDOUT)
         except BaseException:
             self.log.close()
             raise
@@ -172,6 +174,7 @@ class DailyAdapterTests(unittest.TestCase):
         second.setUp()
         try:
             second.config = self.config
+            second.owned_roots = (self.directory,)
             state = second.start()
             self.assertTrue(state["appError"], "competing writer must be visibly read-only")
             before = self.config.read_bytes()

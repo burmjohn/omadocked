@@ -100,11 +100,15 @@ TestCase {
         dock.availableOutputs = [];
         dock.selectIndex(dock.order.indexOf("menu"));
         const footer = findChild(dock, "settings-footer");
+        const popup = findChild(dock, "settings-popup"), scroll = findChild(dock, "settings-scroll");
+        const emptyHeight = popup.height;
         const emptyY = footer.y;
         dock.availableOutputs = Array(20).fill("output");
         compare(footer.y - emptyY, 20 * 30, "monitor space follows only the actual row count");
-        const popup = findChild(dock, "settings-popup"), scroll = findChild(dock, "settings-scroll");
-        verify(popup.height <= 570, "large monitor lists keep the surface bounded");
+        compare(popup.height, emptyHeight, "monitor count does not resize the reserved popup");
+        verify(popup.height <= 680, "large monitor lists keep the surface bounded");
+        verify(popup.height + dock.maxDockHeight + 16 <= dock.availableHeight,
+               "popup and dock envelope fit the available output");
         verify(scroll.contentHeight > scroll.height, "all monitor rows use the one outer overflow viewport");
     }
     function test_settingsKeyboardFocusRevealsOverflowAndReopenResets() {

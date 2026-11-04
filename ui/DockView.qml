@@ -95,6 +95,12 @@ FocusScope {
     signal reducedMotionRequested(bool value)
     signal autoHideRequested(bool value)
     signal intelligentHideRequested(bool value)
+    property bool showHiddenWorkspaceApps: false
+    property bool hideVisibleApps: false
+    signal showHiddenWorkspaceAppsRequested(bool value)
+    signal hideVisibleAppsRequested(bool value)
+    onShowHiddenWorkspaceAppsRequested: value => { if (!settingsManaged) showHiddenWorkspaceApps = value; }
+    onHideVisibleAppsRequested: value => { if (!settingsManaged) hideVisibleApps = value; }
     signal reserveSpaceRequested(bool value)
     onReserveSpaceRequested: value => { if (!settingsManaged) reserveSpace = value; }
     property string minimizeMode: "active"
@@ -220,13 +226,18 @@ FocusScope {
         }
         Accessible.name: text
     }
-    component AppearanceButton: TuneButton {
-        required property var requestPatch
+    component SettingsButton: TuneButton {
+        id: control
         property int pressWheelGeneration: -1
+        signal triggered()
         onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
         onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
-            root.appearanceSettingsRequested(requestPatch)
-        Accessible.onPressAction: root.appearanceSettingsRequested(requestPatch)
+            triggered()
+        Accessible.onPressAction: if (enabled) triggered()
+    }
+    component AppearanceButton: SettingsButton {
+        required property var requestPatch
+        onTriggered: root.appearanceSettingsRequested(requestPatch)
     }
     component BadgeColorField: TextField {
         id: field
@@ -367,6 +378,8 @@ FocusScope {
         if (!fanEligible) { dismissFan(true); return; }
         const id = order[hoveredIndex] || "";
         if (fanOpen && id === fanApp) { fanLeave.stop(); return; }
+        // Title/revision churn must not starve an unchanged eligible hover.
+        if (fanDwell.running && fanPendingApp === id && canFan(id)) return;
         fanDwell.stop(); fanPendingApp = "";
         if (hoveredIndex < 0) { if (fanOpen) fanLeave.restart(); return; }
         fanLeave.stop(); // A close-induced exit cannot cancel a new entry's dwell.
@@ -757,7 +770,9 @@ FocusScope {
             return;
         }
         if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
-            root.openContext(root.focusIndex);
+            if (!root.showAppsButton && root.order[root.focusIndex] === "omarchy-menu")
+                root.toggleMonitorPicker();
+            else root.openContext(root.focusIndex);
             event.accepted = true;
             return;
         }
@@ -812,7 +827,7 @@ FocusScope {
     property var applications: []
     property bool appsManaged: false
     property string appError: ""
-    readonly property string appStatus: appError || (applications || []).filter(app => app && app.pending).map(app => "Opening " + app.id + "…").join(" · ")
+    readonly property string appStatus: appError || (applications || []).filter(app => app && app.pending).map(app => "Opening " + (app.name || app.id) + "…").join(" · ")
     readonly property int statusHeight: appStatus ? 32 : 0
     signal activateRequested(string id)
     signal pinRequested(string id, bool pinned)
@@ -871,7 +886,8 @@ FocusScope {
     readonly property real slotSize: baseIconSize + iconGap
     readonly property real rowX: (width - order.length * slotSize) / 2
     readonly property real dockHeight: Math.ceil(baseIconSize * (peakScale + 20 / 44 * (peakScale - 1)) + 26) + statusHeight
-    readonly property real maxDockHeight: Math.ceil(72 * (2 + 20 / 44) + 26) + statusHeight
+    // Reserve status capacity, not its transient visibility, for Settings.
+    readonly property real maxDockHeight: Math.ceil(72 * (2 + 20 / 44) + 26) + 32
     readonly property real rowY: height - baseIconSize - 24
     // Reserve capacity at the maximum setting, including with popups closed.
     // Extra transparent width is input-masked; sliders never shift popup position.
@@ -889,7 +905,7 @@ FocusScope {
     // Committed resting art envelope, not popup, status, hide progress or client
     // layout. Hold it even when auto-hidden: reservation cannot feed overlap.
     readonly property int reservedHeight: reserveSpace
-        ? Math.ceil(iconSize * (zoomSize / 100 + 20 / 44 * (zoomSize / 100 - 1)) + 26) : 0
+        ? Math.ceil(resolvedIconSize * (zoomSize / 100 + 20 / 44 * (zoomSize / 100 - 1)) + 26) : 0
     property bool nativeOverlapAvailable: true
     onNativeOverlapAvailableChanged: updateVisibility()
     property bool nativeOverlap: false
@@ -1119,12 +1135,28 @@ FocusScope {
                 }
                 Text {
                     objectName: "fallback-" + slot.modelData
-                    anchors.centerIn: art
+                    x: art.x; y: art.y
+                    width: art.width; height: art.height
+                    scale: art.scale
+                    transformOrigin: Item.Bottom
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                     visible: !slot.separator && art.status !== Image.Ready
-                    text: parent.modelData.substring(0, 1).toUpperCase()
+                    // A transient window key is not a useful application label.
+                    readonly property string displayName: String(slot.app.name || (Logic.isChromeId(slot.modelData) ? root.appName(slot.modelData) : "")).trim()
+                    text: displayName && displayName.indexOf("window:") !== 0 ? Array.from(displayName)[0].toUpperCase() : "◇"
                     color: root.accentColor
                     font.pixelSize: root.baseIconSize * 0.57
                     textFormat: Text.PlainText
+                    Accessible.ignored: true
+                    Rectangle {
+                        objectName: "fallback-background"
+                        anchors.fill: parent
+                        z: -1
+                        radius: width * 0.22
+                        color: Qt.rgba(root.shelfColor.r, root.shelfColor.g, root.shelfColor.b, 0.94)
+                        border.color: Qt.alpha(root.accentColor, 0.4)
+                    }
                 }
                 Rectangle {
                     objectName: "separator-" + slot.modelData
@@ -1148,7 +1180,9 @@ FocusScope {
                     objectName: "window-count-" + slot.modelData
                     visible: slot.windowCount > 1
                     text: slot.windowCount > 99 ? "99+" : String(slot.windowCount)
-                    width: 24; height: 15
+                    // Compact icons need a count-sized pill, not a 24px slab.
+                    width: root.baseIconSize <= 32 ? Math.max(14, Math.ceil(contentWidth) + 4) : 24
+                    height: root.baseIconSize <= 32 ? 13 : 15
                     x: (parent.width + ((root.appearanceSettings.badgePosition || "bottom-right").endsWith("left") ? -root.baseIconSize : root.baseIconSize)) / 2
                         - ((root.appearanceSettings.badgePosition || "bottom-right").endsWith("left") ? 0 : width)
                     y: (root.appearanceSettings.badgePosition || "bottom-right").startsWith("top") ? 0 : root.baseIconSize - height
@@ -1206,6 +1240,7 @@ FocusScope {
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             onWheel: wheel => {
                 root.cancelDrag();
+                if (root.settingsOpen) { wheel.accepted = true; return; }
                 const delta = wheel.angleDelta.y || wheel.pixelDelta.y;
                 const id = root.order[root.hitIndex(x + wheel.x)] || "";
                 if (delta && id === "omarchy-menu") root.shellGestureRequested("wheel", delta);
@@ -1213,7 +1248,7 @@ FocusScope {
                 wheel.accepted = true;
             }
             onPressed: mouse => {
-                if (root.settingsOpen && !root.editorOpen) {
+                if (root.settingsOpen) {
                     mouse.accepted = true;
                     return;
                 }
@@ -1244,7 +1279,7 @@ FocusScope {
                 const dy = mouse.y - root.pressPosition.y;
                 if (Math.sqrt(dx * dx + dy * dy) >= 8) {
                     if (root.folderChooserOpen) { root.cancelDrag(); return; }
-                    if (Logic.isChromeId(root.pressedId)) { root.pressedIndex = -1; return; }
+                    if (Logic.isChromeId(root.pressedId) || (root.appMeta[root.pressedId] || {}).kind === "separator") { root.pressedIndex = -1; return; }
                     root.dragActive = true;
                 }
                 if (root.dragActive)
@@ -1257,7 +1292,7 @@ FocusScope {
             onCanceled: root.cancelDrag()
             onReleased: mouse => {
                 if (mouse.button !== Qt.LeftButton && mouse.button !== Qt.MiddleButton) return;
-                if (root.settingsOpen && !root.editorOpen && root.pressedIndex < 0) {
+                if (root.settingsOpen && root.pressedIndex < 0) {
                     root.settingsOpen = false;
                     return;
                 }
@@ -1429,8 +1464,9 @@ FocusScope {
         id: settingsDismiss
         objectName: "settings-dismiss"
         anchors.fill: parent
-        visible: root.settingsOpen && !root.editorOpen
+        visible: root.settingsOpen
         enabled: visible
+        acceptedButtons: Qt.AllButtons
         z: 40
         onPressed: mouse => { mouse.accepted = true }
         onReleased: mouse => { mouse.accepted = true; root.settingsOpen = false }
@@ -1443,7 +1479,7 @@ FocusScope {
         x: (root.width - width) / 2
         y: 8
         width: Math.min(1120, root.width - 16)
-        height: Math.max(1, Math.min(570, root.availableHeight - root.maxDockHeight - 16))
+        height: Math.max(1, Math.min(680, root.availableHeight - root.maxDockHeight - 16))
         padding: 16
         visible: root.settingsOpen
         modal: false
@@ -1507,6 +1543,10 @@ FocusScope {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: event => {
                     ++settingsScroll.wheelGeneration;
+                    sizeSlider.cancelPreview();
+                    transparencySlider.cancelPreview();
+                    zoomSlider.cancelPreview();
+                    waveSlider.cancelPreview();
                     tooltipDelaySlider.cancelPreview();
                     revealDelaySlider.cancelPreview();
                     const flick = settingsScroll.flickable();
@@ -1625,11 +1665,11 @@ FocusScope {
                         Accessible.name: "Use host theme opacity; retain explicit transparency"
                         requestPatch: ({themeOpacity:!root.themeOpacity})
                     }
-                    TuneButton {
+                    SettingsButton {
                         objectName: "badge-settings"; width: (delaySettings.width - 8) * .22
                         text: "Badges"; chosen: root.badgeSettingsOpen
                         Accessible.name: "Show window count badge appearance settings"
-                        onClicked: root.badgeSettingsOpen = !root.badgeSettingsOpen
+                        onTriggered: root.badgeSettingsOpen = !root.badgeSettingsOpen
                     }
                 }
                 Column {
@@ -1689,12 +1729,12 @@ FocusScope {
                     committedValue: root.revealDelay; Accessible.name: "Reveal delay in milliseconds"
                     onCommitRequested: value => root.delaySettingsRequested({revealDelay:value})
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "reserve-space"; width: parent.width
                     text: root.reserveSpace ? "Reserve shelf space: on" : "Reserve shelf space: off"
                     chosen: root.reserveSpace
                     Accessible.name: "Reserve desktop space even while the shelf is hidden"
-                    onClicked: root.reserveSpaceRequested(!root.reserveSpace)
+                    onTriggered: root.reserveSpaceRequested(!root.reserveSpace)
                 }
                 CheckBox {
                     id: followOutputCheck
@@ -1723,19 +1763,19 @@ FocusScope {
                 font.bold: true
                 textFormat: Text.PlainText
             }
-            TuneButton {
+            SettingsButton {
                 id: addItem
                 objectName: "add-item"
                 x: parent.width - width - 78; y: 0
                 width: 90; text: "Add Item"
                 Accessible.name: "Add a custom launcher item"
-                onClicked: root.openItemEditor("")
+                onTriggered: root.openItemEditor("")
             }
-            TuneButton {
+            SettingsButton {
                 objectName: "close-settings"
                 x: parent.width - width; y: 0
                 text: "Close"
-                onClicked: root.settingsOpen = false
+                onTriggered: root.settingsOpen = false
             }
             Item {
                 id: appearance
@@ -1760,12 +1800,12 @@ FocusScope {
                 Accessible.name: "Icon size"
                 onCommitRequested: value => root.iconSizeRequested(value)
             }
-            TuneButton {
+            SettingsButton {
                 objectName: "size-auto"
                 y: 56; anchors.right: parent.right
                 text: "Auto"
                 chosen: root.iconSize === 0
-                onClicked: root.iconSizeRequested(root.iconSize === 0 ? root.resolvedIconSize : 0)
+                onTriggered: root.iconSizeRequested(root.iconSize === 0 ? root.resolvedIconSize : 0)
             }
             Text {
                 y: 96; text: "Transparency"; color: root.textColor; font.pixelSize: 13
@@ -1788,20 +1828,20 @@ FocusScope {
             }
             Row {
                 y: 160; spacing: 8
-                TuneButton {
+                SettingsButton {
                     objectName: "mode-wave"; text: "Wave"
                     chosen: root.motionMode === "wave"
-                    onClicked: root.modeRequested("wave")
+                    onTriggered: root.modeRequested("wave")
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "mode-zoom"; text: "Zoom"
                     chosen: root.motionMode === "zoom"
-                    onClicked: root.modeRequested("zoom")
+                    onTriggered: root.modeRequested("zoom")
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "mode-off"; text: "Off"
                     chosen: root.motionMode === "off"
-                    onClicked: root.modeRequested("off")
+                    onTriggered: root.modeRequested("off")
                 }
             }
             Text {
@@ -1844,50 +1884,57 @@ FocusScope {
             }
             Row {
                 y: 282; spacing: 8; width: parent.width
-                TuneButton {
+                SettingsButton {
                     objectName: "reduced-motion"; text: "Reduce motion"; width: (parent.width - 8) / 2
                     chosen: root.reducedMotion
-                    onClicked: root.reducedMotionRequested(!root.reducedMotion)
+                    onTriggered: root.reducedMotionRequested(!root.reducedMotion)
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "auto-hide"; text: root.autoHide ? "Auto-hide: on" : "Auto-hide: off"; width: (parent.width - 8) / 2
                     chosen: root.autoHide
-                    onClicked: root.autoHideRequested(!root.autoHide)
+                    onTriggered: root.autoHideRequested(!root.autoHide)
                 }
             }
+            Text {
+                objectName: "minimize-label"
+                y: 314; width: parent.width
+                text: "Click to minimize"; textFormat: Text.PlainText
+                color: root.textColor; font.pixelSize: 11
+                elide: Text.ElideRight
+            }
             Row {
-                y: 326; spacing: 8; width: parent.width
-                TuneButton {
+                y: 332; spacing: 8; width: parent.width
+                SettingsButton {
                     objectName: "minimize-active"; text: "Active"; width: (parent.width - 16) / 3
                     chosen: root.minimizeMode === "active"
                     Accessible.name: "Minimize active window"
-                    onClicked: root.minimizeModeRequested("active")
+                    onTriggered: root.minimizeModeRequested("active")
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "minimize-all"; text: "All"; width: (parent.width - 16) / 3
                     chosen: root.minimizeMode === "all"
                     Accessible.name: "Minimize all application windows"
-                    onClicked: root.minimizeModeRequested("all")
+                    onTriggered: root.minimizeModeRequested("all")
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "minimize-off"; text: "Off"; width: (parent.width - 16) / 3
                     chosen: root.minimizeMode === "off"
                     Accessible.name: "Turn click to minimize off"
-                    onClicked: root.minimizeModeRequested("off")
+                    onTriggered: root.minimizeModeRequested("off")
                 }
             }
             Row {
                 y: 364; spacing: 8; width: parent.width
-                TuneButton {
+                SettingsButton {
                     objectName: "all-displays"; text: "All displays"; width: (parent.width - 8) / 2
                     chosen: root.monitorMode === "all"
-                    onClicked: root.monitorsRequested("all", [])
+                    onTriggered: root.monitorsRequested("all", [])
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "selected-displays"; text: "Selected displays"; width: (parent.width - 8) / 2
                     enabled: root.availableOutputs.length > 0
                     chosen: root.monitorMode === "selected"
-                    onClicked: root.monitorsRequested("selected", root.monitorMode === "selected" ? root.selectedOutputs : root.availableOutputs)
+                    onTriggered: root.monitorsRequested("selected", root.monitorMode === "selected" ? root.selectedOutputs : root.availableOutputs)
                 }
             }
             Item {
@@ -2008,73 +2055,123 @@ FocusScope {
                 }
             }
             Column {
+                id: workspaceFilters
+                objectName: "workspace-filters"
+                y: Math.max(0, settingsToggles.y + settingsToggles.height + 6)
+                width: parent.width
+                spacing: 4
+                CheckBox {
+                    id: hiddenWorkspaceCheck
+                    objectName: "show-hidden-workspace-apps"
+                    width: parent.width
+                    height: 30
+                    text: "Separate hidden-workspace apps"
+                    Accessible.name: "Show apps from workspaces that are not on any screen in a separate dock area"
+                    checked: root.showHiddenWorkspaceApps
+                    wheelEnabled: false
+                    property int pressWheelGeneration: -1
+                    onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
+                    nextCheckState: function() { return checkState; }
+                    onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
+                        root.showHiddenWorkspaceAppsRequested(!root.showHiddenWorkspaceApps)
+                    Accessible.onPressAction: root.showHiddenWorkspaceAppsRequested(!root.showHiddenWorkspaceApps)
+                    contentItem: Text {
+                        text: hiddenWorkspaceCheck.text; color: root.textColor
+                        leftPadding: 30; verticalAlignment: Text.AlignVCenter
+                        font.pixelSize: 13; textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                }
+                CheckBox {
+                    id: hideVisibleCheck
+                    objectName: "hide-visible-apps"
+                    width: parent.width
+                    height: 30
+                    text: "Hide apps already on a screen"
+                    Accessible.name: "Hide running apps that are already visible on a screen"
+                    checked: root.hideVisibleApps
+                    wheelEnabled: false
+                    property int pressWheelGeneration: -1
+                    onPressed: pressWheelGeneration = settingsScroll.wheelGeneration
+                    nextCheckState: function() { return checkState; }
+                    onClicked: if (pressWheelGeneration === settingsScroll.wheelGeneration)
+                        root.hideVisibleAppsRequested(!root.hideVisibleApps)
+                    Accessible.onPressAction: root.hideVisibleAppsRequested(!root.hideVisibleApps)
+                    contentItem: Text {
+                        text: hideVisibleCheck.text; color: root.textColor
+                        leftPadding: 30; verticalAlignment: Text.AlignVCenter
+                        font.pixelSize: 13; textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+            Column {
                 id: previewSettings
-                y: Math.max(0, settingsToggles.y + settingsToggles.height)
+                y: Math.max(0, workspaceFilters.y + workspaceFilters.height)
                 width: parent.width; spacing: 6
 
                 Row {
                     width: parent.width; spacing: 8
-                    TuneButton {
+                    SettingsButton {
                         objectName: "attention-hints-setting"; width: (parent.width - 8) / 2
                         text: root.showUrgentHint ? "Attention: on" : "Attention: off"
                         chosen: root.showUrgentHint
-                        onClicked: root.attentionSettingsRequested({showUrgentHint:!root.showUrgentHint})
+                        onTriggered: root.attentionSettingsRequested({showUrgentHint:!root.showUrgentHint})
                     }
-                    TuneButton {
+                    SettingsButton {
                         objectName: "launch-bounce-setting"; width: (parent.width - 8) / 2
                         text: root.launchBounce ? "Bounce: on" : "Bounce: off"
                         Accessible.name: "Launch bounce"
                         chosen: root.launchBounce
-                        onClicked: root.launchBounceRequested(!root.launchBounce)
+                        onTriggered: root.launchBounceRequested(!root.launchBounce)
                     }
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "notification-attention-setting"; width: parent.width
                     text: root.urgentOnNotification ? "Notification attention: on" : "Notification attention: off"
                     chosen: root.urgentOnNotification
-                    onClicked: root.attentionSettingsRequested({urgentOnNotification:!root.urgentOnNotification})
+                    onTriggered: root.attentionSettingsRequested({urgentOnNotification:!root.urgentOnNotification})
                 }
                 Text {
                     width: parent.width; wrapMode: Text.Wrap; textFormat: Text.PlainText
                     color: root.textColor; font.pixelSize: 12
-                    text: "Notifications: " + root.notificationStatus + ". Exact app matches only.\nSample: " + root.soundSampleStatus
-                        + ". Saved sound: " + (root.urgentSound ? root.urgentSoundName : "off") + "."
+                    objectName: "notification-capability-status"
+                    text: "Notifications: " + (root.notificationStatus === "unavailable" ? "unavailable — host notification/DND access required" : root.notificationStatus) + "\nSample: " + root.soundSampleStatus
                 }
                 Row {
                     width: parent.width; spacing: 8
-                    TuneButton {
+                    SettingsButton {
                         objectName: "urgent-sound-setting"; width: (parent.width - 8) / 2
                         text: root.urgentSound ? "Attention sound: on" : "Attention sound: off"
                         chosen: root.urgentSound
                         enabled: root.urgentSound || root.soundStatus === "available" && root.urgentSoundName !== "none"
-                        onClicked: root.attentionSettingsRequested({urgentSound:!root.urgentSound})
+                        onTriggered: root.attentionSettingsRequested({urgentSound:!root.urgentSound})
                     }
-                    TuneButton {
+                    SettingsButton {
                         objectName: "urgent-sound-sample"; width: (parent.width - 8) / 2
                         text: "Play sample"
                         Accessible.name: "Play sound sample"
                         enabled: root.settingsOpen && root.urgentSound && root.soundSampleStatus === "ready"
-                        onClicked: if (enabled) root.soundSampleRequested()
-                        Accessible.onPressAction: if (enabled) root.soundSampleRequested()
+                        onTriggered: if (enabled) root.soundSampleRequested()
                         Keys.onReturnPressed: if (enabled) root.soundSampleRequested()
                         Keys.onEnterPressed: if (enabled) root.soundSampleRequested()
                     }
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "urgent-sound-name"; width: parent.width
                     text: "Sound: " + root.urgentSoundName + " (next)"
-                    onClicked: {
+                    onTriggered: {
                         const name = Parity.soundNames[(Parity.soundNames.indexOf(root.urgentSoundName) + 1) % Parity.soundNames.length];
                         root.attentionSettingsRequested({urgentSoundName:name, urgentSound:name !== "none" && root.urgentSound});
                     }
                 }
                 Row {
                     width: parent.width; spacing: 8
-                    TuneButton {
+                    SettingsButton {
                         objectName: "previews-enabled"; width: (parent.width - 8) / 2
                         text: root.previewsEnabled ? "Window previews: on" : "Window previews: off"
                         chosen: root.previewsEnabled
-                        onClicked: root.previewsEnabledRequested(!root.previewsEnabled)
+                        onTriggered: root.previewsEnabledRequested(!root.previewsEnabled)
                     }
                     CheckBox {
                         id: advancedTooltipCheck
@@ -2098,32 +2195,41 @@ FocusScope {
                     }
                 }
             }
+            Text {
+                objectName: "preview-capability-status"
+                y: previewSettings.y + previewSettings.height + 6
+                width: parent.width
+                text: "Still previews require host privacy authority; unavailable on stock Omarchy."
+                wrapMode: Text.Wrap; textFormat: Text.PlainText
+                color: root.textColor; font.pixelSize: 12
+                id: previewCapabilityStatus
+            }
             Column {
                 id: parkingRecovery
-                y: previewSettings.y + previewSettings.height + 12
+                y: previewCapabilityStatus.y + previewCapabilityStatus.height + 6
                 width: parent.width; spacing: 6
                 visible: root.parkedWindows.length > 0
-                TuneButton {
+                SettingsButton {
                     objectName: "recover-parked-here"; width: parent.width
                     text: "Recover parked windows here"
                     Accessible.name: "Recover all parked windows to the current workspace"
-                    onClicked: root.recoverParkedRequested("here")
+                    onTriggered: root.recoverParkedRequested("here")
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "recover-parked-origin"; width: parent.width
                     text: "Recover parked windows to origins"
                     Accessible.name: "Recover all parked windows to recorded origin workspaces"
-                    onClicked: root.recoverParkedRequested("origin")
+                    onTriggered: root.recoverParkedRequested("origin")
                 }
             }
-            TuneButton {
+            SettingsButton {
                 id: recoverConfig
                 objectName: "recover-config"
                 y: parkingRecovery.y + (parkingRecovery.visible ? parkingRecovery.height + 12 : 0)
                 width: parent.width; text: "Restore last known good configuration"
                 visible: root.canRecover
                 Accessible.name: "Restore last known good configuration"
-                onClicked: root.recoverRequested()
+                onTriggered: root.recoverRequested()
             }
             Column {
                 id: overrideControls
@@ -2143,17 +2249,17 @@ FocusScope {
                     width: parent.width; placeholderText: "Exact desktop entry ID"
                     Accessible.name: "Exact desktop entry ID for matching override"
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "apply-override"; text: "Apply override"; width: parent.width
                     enabled: !!overrideAppId.text && !!overrideDesktopId.text
                     Accessible.name: "Apply exact application matching override"
-                    onClicked: root.overrideRequested(overrideAppId.text, overrideDesktopId.text)
+                    onTriggered: root.overrideRequested(overrideAppId.text, overrideDesktopId.text)
                 }
-                TuneButton {
+                SettingsButton {
                     objectName: "clear-override"; text: "Clear override"; width: parent.width
                     enabled: !!overrideAppId.text
                     Accessible.name: "Remove exact application matching override"
-                    onClicked: root.overrideRequested(overrideAppId.text, "")
+                    onTriggered: root.overrideRequested(overrideAppId.text, "")
                 }
             }
             }
@@ -2167,7 +2273,9 @@ FocusScope {
         visible: root.contextIndex >= 0 && root.effectiveProgress > 0
         x: (root.width - width) / 2; y: 8
         width: Math.min(300, root.width - 16)
-        height: root.folderChooserOpen ? 460 : root.desktopActionsOpen ? root.desktopActionsHeight : root.windowChooserOpen ? root.windowChooserHeight : root.editableContext ? 104 + extraActions.height : 166 + extraActions.height
+        readonly property real requestedHeight: root.folderChooserOpen ? 460 : root.desktopActionsOpen ? root.desktopActionsHeight : root.windowChooserOpen ? root.windowChooserHeight : root.editableContext ? 104 + extraActions.height : 166 + extraActions.height
+        height: root.folderChooserOpen || root.windowChooserOpen
+            ? Math.max(0, Math.min(requestedHeight, root.height - root.dockHeight - 16)) : requestedHeight
         radius: 12
         color: Qt.rgba(root.shelfColor.r, root.shelfColor.g, root.shelfColor.b, 1)
         border.color: root.accentColor

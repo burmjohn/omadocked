@@ -32,7 +32,8 @@ Item {
         if (key === Qt.Key_Down || key === Qt.Key_Up) {
             if (!entries.length) return;
             const index = entries.findIndex(e => e.path === selectionPath);
-            const next = (index + (key === Qt.Key_Down ? 1 : entries.length - 1) + entries.length) % entries.length;
+            const next = index < 0 ? (key === Qt.Key_Down ? 0 : entries.length - 1)
+                : (index + (key === Qt.Key_Down ? 1 : entries.length - 1)) % entries.length;
             selectionPath = entries[next].path;
             list.positionViewAtIndex(next, ListView.Contain);
             focusPart = 0;

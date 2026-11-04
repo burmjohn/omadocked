@@ -1,5 +1,6 @@
 {
   "tests/lua_compositor.py": [
+    "subprocess.run(['/usr/bin/lua', '-'], input=stub + code + '\\nfor _,w in ipairs(focused) do print(w) end\\n', text=True, capture_output=True, timeout=3, check=True)",
     "subprocess.run(['/usr/bin/lua', '-'], input=stub + code + output, text=True, capture_output=True, timeout=3, check=True)"
   ],
   "tests/relocation_recovery.py": [
@@ -39,6 +40,13 @@
   ],
   "tests/test_folder_service.py": [
     "subprocess.run(['/usr/bin/python3', str(ROOT / 'services/folder_scan.py')], input=json.dumps({'path': str(self.folder), 'generation': 1, 'token': 'signed'}), capture_output=True, text=True, timeout=3)"
+  ],
+  "tests/test_omadock_import.py": [
+    "subprocess.run(['node', '-e', script], input=self.dest.read_text(), cwd=ROOT, capture_output=True, text=True, timeout=3, check=True)",
+    "subprocess.run(command + ['--apply'], capture_output=True, text=True, cwd=self.root)",
+    "subprocess.run(command + ['--settings', str(self.root / 'missing')], env=env, capture_output=True, text=True)",
+    "subprocess.run(command, capture_output=True, text=True, cwd=self.root)",
+    "subprocess.run(command, env=env, capture_output=True, text=True)"
   ],
   "tests/test_parking_helper.py": [
     "subprocess.Popen([sys.executable, str(HELPER), str(journal)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, env=env)"

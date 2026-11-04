@@ -7,6 +7,22 @@ import json
 import subprocess
 
 
+def execute_focus(code):
+    """Run Lua against inert factories; only dispatch records a focus request."""
+    stub = '''local focused={}
+local token={}
+hl={dsp={focus=function(args) return {token=token,args=args} end},
+    dispatch=function(dispatcher)
+        assert(type(dispatcher)=='table' and dispatcher.token==token)
+        table.insert(focused,dispatcher.args.workspace)
+    end}
+'''
+    result = subprocess.run(['/usr/bin/lua', '-'],
+                            input=stub + code + '\nfor _,w in ipairs(focused) do print(w) end\n',
+                            text=True, capture_output=True, timeout=3, check=True)
+    return result.stdout.splitlines()
+
+
 def execute_moves(code, clients):
     windows = []
     for client in clients:

@@ -43,6 +43,102 @@ TestCase {
         compare(d.settingsOpen, false, "app click while Settings is open closes it");
         compare(launched.length, 0, "that click must not launch");
     }
+    function test_editorOutsideShelf_data() {
+        return [{tag:"app", id:"fixture0", button:Qt.LeftButton},
+            {tag:"logo", id:"omarchy-menu", button:Qt.LeftButton},
+            {tag:"middle", id:"fixture0", button:Qt.MiddleButton}];
+    }
+    function test_editorOutsideShelf(data) {
+        const d = makeDock();
+        let actions = 0;
+        d.activateRequested.connect(() => ++actions);
+        d.newInstanceRequested.connect(() => ++actions);
+        d.shellGestureRequested.connect(() => ++actions);
+        d.openItemEditor("");
+        findChild(d, "editor-name").text = "Unsaved fixture";
+        mouseClick(d, d.renderedSlots[d.order.indexOf(data.id)].center, d.rowY + d.baseIconSize / 2, data.button);
+        compare(actions, 0, "outside editor gesture must never dispatch");
+        compare(d.settingsOpen, false);
+        compare(d.editorOpen, false);
+        compare(d.dragActive, false);
+    }
+    function test_editorShelfWheelCannotDispatch() {
+        const d = makeDock();
+        let actions = 0;
+        d.shellGestureRequested.connect(() => ++actions);
+        d.openItemEditor("");
+        mouseWheel(d, d.renderedSlots[0].center, d.rowY + d.baseIconSize / 2, 0, -120);
+        compare(actions, 0, "editor owns outside shelf wheel gestures too");
+        verify(d.editorOpen);
+    }
+    function test_hiddenSettingsKeyboard_data() {
+        return [{tag:"menu", key:Qt.Key_Menu, modifiers:Qt.NoModifier},
+            {tag:"shift-f10", key:Qt.Key_F10, modifiers:Qt.ShiftModifier}];
+    }
+    function test_hiddenSettingsKeyboard(data) {
+        const d = makeDock();
+        d.applications = [];
+        d.showAppsButton = false;
+        let gestures = 0;
+        d.shellGestureRequested.connect(() => ++gestures);
+        compare(d.order, ["omarchy-menu"]);
+        d.enterKeyboard();
+        keyClick(data.key, data.modifiers);
+        verify(d.settingsOpen);
+        compare(gestures, 0);
+        d.settingsOpen = false;
+        d.enterKeyboard();
+        keyClick(Qt.Key_Return);
+        compare(gestures, 1, "Omarchy primary keyboard behavior is preserved");
+    }
+    function test_statusIndependentGeometry_data() {
+        return [{tag:"tall", height:1080}, {tag:"compact", height:600}];
+    }
+    function test_statusIndependentGeometry(data) {
+        const d = makeDock();
+        d.availableHeight = data.height;
+        d.settingsOpen = true;
+        const popup = findChild(d, "settings-popup");
+        const geometry = [d.height, popup.height, data.height - d.height + popup.y];
+        for (const error of ["Fixture failure", ""]) {
+            d.appError = error;
+            compare([d.height, popup.height, data.height - d.height + popup.y], geometry);
+        }
+        for (const pending of [true, false]) {
+            d.applications = [{id:"fixture", name:"Fixture", pending:pending}];
+            compare([d.height, popup.height, data.height - d.height + popup.y], geometry);
+        }
+    }
+    function test_pendingEditorFreezesDraft() {
+        const d = makeDock();
+        d.openItemEditor("");
+        const editor = findChild(d, "launcher-editor");
+        editor.begin({kind:"command", name:"Submitted", program:"fixture", args:["one"]});
+        wait(0);
+        d.launcherSaveAccepted(41);
+        for (const name of ["editor-name", "editor-kind", "editor-program", "argument-0", "editor-terminal", "editor-enabled", "add-argument"]) {
+            verify(findChild(editor, name), name);
+            compare(findChild(editor, name).enabled, false, name + " must freeze while saving");
+        }
+        verify(findChild(d, "editor-cancel").enabled);
+        d.launcherSaveResult(40, true);
+        verify(d.editorOpen);
+        d.launcherSaveResult(41, false);
+        verify(d.editorOpen);
+        verify(findChild(d, "editor-name").enabled);
+        compare(findChild(d, "editor-name").text, "Submitted");
+        d.launcherSaveAccepted(42);
+        d.launcherSaveResult(42, true);
+        compare(d.editorOpen, false);
+    }
+    function test_pendingStatusUsesDisplayName() {
+        const d = makeDock();
+        d.applications = [{id:"launcher:fixture", name:"Build <docs>", pending:true}];
+        compare(d.appStatus, "Opening Build <docs>…");
+        compare(findChild(d, "app-status-text").textFormat, Text.PlainText);
+        d.applications = [{id:"fixture", pending:true}];
+        compare(d.appStatus, "Opening fixture…");
+    }
     function test_middle_preserved() {
         const d=makeDock(); let gestures=[];
         d.shellGestureRequested.connect(function(kind){gestures.push(kind);});
@@ -79,10 +175,13 @@ TestCase {
         const names = findChild(d, "show-app-names");
         const settingsIcon = findChild(d, "show-apps-button");
         const overlap = findChild(d, "intelligent-hide");
-        verify(names && settingsIcon && overlap);
-        verify(!boxesOverlap(names, settingsIcon, d), "Show app names vs Settings icon");
-        verify(!boxesOverlap(names, overlap, d), "Show app names vs Overlap hide");
-        verify(!boxesOverlap(settingsIcon, overlap, d), "Settings icon vs Overlap hide");
+        const hiddenWorlds = findChild(d, "show-hidden-workspace-apps");
+        const hideVisible = findChild(d, "hide-visible-apps");
+        verify(names && settingsIcon && overlap && hiddenWorlds && hideVisible);
+        const controls = [names, settingsIcon, overlap, hiddenWorlds, hideVisible];
+        for (let i = 0; i < controls.length; ++i)
+            for (let j = i + 1; j < controls.length; ++j)
+                verify(!boxesOverlap(controls[i], controls[j], d), controls[i].objectName + " vs " + controls[j].objectName);
         d.availableWidth = 360;
         verify(waitForRendering(d));
         wait(30);
@@ -90,7 +189,26 @@ TestCase {
         verify(attention);
         verify(!boxesOverlap(names, settingsIcon, d));
         verify(!boxesOverlap(settingsIcon, overlap, d));
+        verify(!boxesOverlap(hiddenWorlds, hideVisible, d), "workspace filters vs each other");
         verify(!boxesOverlap(names, attention, d), "wrapped Show app names vs Attention");
         verify(!boxesOverlap(settingsIcon, attention, d), "wrapped Settings icon vs Attention");
+        verify(!boxesOverlap(hiddenWorlds, attention, d), "hidden-workspace toggle vs Attention");
+        verify(!boxesOverlap(hideVisible, attention, d), "hide-visible toggle vs Attention");
+    }
+    function test_workspaceFilterCheckboxesToggle() {
+        const d = makeDock();
+        d.settingsOpen = true;
+        verify(waitForRendering(d));
+        const hiddenWorlds = findChild(d, "show-hidden-workspace-apps");
+        const hideVisible = findChild(d, "hide-visible-apps");
+        compare(d.showHiddenWorkspaceApps, false);
+        compare(d.hideVisibleApps, false);
+        hiddenWorlds.Accessible.pressAction();
+        hideVisible.Accessible.pressAction();
+        compare(d.showHiddenWorkspaceApps, true);
+        compare(d.hideVisibleApps, true);
+        hiddenWorlds.Accessible.pressAction();
+        compare(d.showHiddenWorkspaceApps, false);
+        compare(d.hideVisibleApps, true);
     }
 }

@@ -57,6 +57,40 @@ class SpawnSafetyTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0][0], '/usr/bin/quickshell')
             self.assertEqual(run.call_args.kwargs['env']['PATH'], str(root))
 
+    def test_long_scratch_root_gets_short_private_ipc_runtime(self):
+        assert safety is not None
+        with tempfile.TemporaryDirectory(prefix='owned scratch with spaces-') as tmp, patch('subprocess.Popen') as popen:
+            root = Path(tmp) / ('nested-' * 12)
+            root.mkdir()
+            env = dict(QT_QPA_PLATFORM='offscreen', OMADOCKED_TEST_ROOT='/not-owned',
+                       OMADOCKED_TEST_ROOTS='["/"]',
+                       WAYLAND_SOCKET='7', XDG_RUNTIME_DIR='/run/user/123')
+            proc = safety.spawn(['/usr/bin/quickshell', '-p', str(root/'shell.qml')],
+                                required='offscreen', env=env, root=root)
+            runtime = Path(proc.test_env['XDG_RUNTIME_DIR'])
+            socket = runtime/'quickshell/by-id/12345678901/ipc.sock'
+            self.assertLess(len(os.fsencode(socket)), 108, 'Linux AF_UNIX pathname must fit including NUL')
+            self.assertEqual(runtime.stat().st_mode & 0o777, 0o700)
+            self.assertNotIn('WAYLAND_SOCKET', proc.test_env)
+            self.assertEqual(proc.test_env['OMADOCKED_TEST_ROOT'], str(root.resolve()))
+            import json
+            self.assertEqual(json.loads(proc.test_env['OMADOCKED_TEST_ROOTS']), [str(root.resolve())])
+            self.assertEqual(env['OMADOCKED_TEST_ROOT'], '/not-owned')
+            proc.test_runtime.cleanup()
+            self.assertFalse(runtime.exists())
+
+    def test_failed_spawn_cleans_private_runtime(self):
+        assert safety is not None
+        with tempfile.TemporaryDirectory(prefix='r') as tmp, \
+                patch.object(tempfile, 'tempdir', tmp), \
+                patch('subprocess.Popen', side_effect=OSError('owned spawn failure')):
+            root = Path(tmp)/'fixture'
+            root.mkdir()
+            with self.assertRaisesRegex(OSError, 'owned spawn failure'):
+                safety.spawn(['/usr/bin/quickshell', '-p', str(root/'shell.qml')],
+                             required='offscreen', env={'QT_QPA_PLATFORM': 'offscreen'}, root=root)
+            self.assertEqual(list(Path(tmp).iterdir()), [root])
+
     def test_native_opt_in_and_socket_prerequisites(self):
         from types import SimpleNamespace
         import stat
@@ -96,7 +130,9 @@ class SpawnSafetyTests(unittest.TestCase):
             backends.backend_for('test_unknown.Fixture.test_new')
         for filename, expected in {
             'test_app_service.py': 1, 'test_parking_service.py': 1, 'test_daily_adapter.py': 1,
-            'test_folder_service.py': 1, 'test_folder_transactions.py': 1, 'test_host_overlay.py': 1,
+            'test_folder_service.py': 2, 'test_folder_transactions.py': 1, 'test_host_overlay.py': 1,
+            'test_icon_service_offscreen.py': 1,
+            'test_app_service_lifecycle.py': 1,
             'test_shell_gestures.py': 1, 'shared_host.py': 1, 'relocation_recovery.py': 1,
         }.items():
             tree = ast.parse((ROOT/'tests'/filename).read_text())

@@ -14,8 +14,8 @@ QtObject {
         else if (decision.action === "workspace") {
             // The installed Hyprland 0.56 Lua API and Omadock use this exact selector.
             argv = ["hyprctl", "eval", decision.target === "e+1"
-                ? 'hl.dsp.focus({ workspace = "e+1" })'
-                : 'hl.dsp.focus({ workspace = "e-1" })'];
+                ? 'hl.dispatch(hl.dsp.focus({ workspace = "e+1" }))'
+                : 'hl.dispatch(hl.dsp.focus({ workspace = "e-1" }))'];
         } else return false;
         Quickshell.execDetached(argv);
         return true; // Request submitted, not compositor/application acknowledgement.
