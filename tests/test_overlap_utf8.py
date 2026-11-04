@@ -4,11 +4,13 @@ import socket
 import threading
 import time
 import test_app_service as base
+from test_overlap_socket import socket_call_with_evidence
 
 CAP = 2097152
 
 
 class OverlapUtf8Tests(base.AppServiceTests):
+    call = socket_call_with_evidence
     def setUp(self):
         super().setUp()
         self.plan = []

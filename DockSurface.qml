@@ -204,6 +204,10 @@ Item {
             onShowAppNamesRequested: value => root.controller.setShowAppNames(value)
             showAppsButton: root.controller.showAppsButton
             onShowAppsButtonRequested: value => root.controller.setShowAppsButton(value)
+            showHiddenWorkspaceApps: root.controller.showHiddenWorkspaceApps
+            onShowHiddenWorkspaceAppsRequested: value => root.controller.setShowHiddenWorkspaceApps(value)
+            hideVisibleApps: root.controller.hideVisibleApps
+            onHideVisibleAppsRequested: value => root.controller.setHideVisibleApps(value)
             onLaunchBounceRequested: value => root.controller.setLaunchBounce(value)
             autoHide: root.controller.autoHide
             intelligentHide: root.controller.intelligentHide

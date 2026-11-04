@@ -14,6 +14,11 @@ QtObject {
     readonly property bool busy: opened && (_pending !== null || _active !== null)
     property var _pending: null
     property var _active: null
+    property bool _retiring: false
+    property Timer _deadline: Timer {
+        interval: 5000
+        onTriggered: root._expire()
+    }
     property string _path: ""
     readonly property string _session: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)
     function open(id: string, path: string): bool {
@@ -38,14 +43,36 @@ QtObject {
         if (_process.running) _process.running = false;
     }
     function _pump(): void {
-        if (_active || !_pending || !opened) return;
+        if (_active || _retiring || !_pending || !opened) return;
         _active = _pending;
         _pending = null;
+        _deadline.restart();
         _process.running = true;
         _process.write(JSON.stringify(_active));
         _process.stdinEnabled = false;
     }
+    function _expire(): void {
+        const expected = _active;
+        if (!expected) return;
+        _active = null;
+        // Never reuse a still-live child: only its exit can release this fence.
+        _retiring = _process.running;
+        if (opened && expected.generation === generation)
+            result = {status:"unreadable", complete:false, entries:[], message:"Folder scan timed out. Try again."};
+        if (_retiring) _process.signal(9);
+        else {
+            _process.stdinEnabled = true;
+            _pump();
+        }
+    }
     function _finish(code: int, status: int, text: string): void {
+        if (_retiring) {
+            _retiring = false;
+            _process.stdinEnabled = true;
+            _pump();
+            return;
+        }
+        _deadline.stop();
         const expected = _active;
         _active = null;
         if (opened && expected && expected.generation === generation) {

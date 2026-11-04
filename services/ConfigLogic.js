@@ -10,7 +10,8 @@ function defaults() {
         motionMode: "wave", reducedMotion: false, showAppNames: true, advancedTooltips: false, launchBounce: true, tooltipDelay:450, revealDelay:160, autoHide: true, intelligentHide: false, minimizeMode: "active",
         reserveSpace: false, followActiveOutput: false, monitorMode: "all", selectedOutputs: [], folderColor: "theme",
         previewsEnabled: true, livePreviews: false, showUrgentHint:true, urgentOnNotification:true,
-        urgentSound:false, urgentSoundName:"bell", showAppsButton: true}, overrides: {}};
+        urgentSound:false, urgentSoundName:"bell", showAppsButton: true,
+        showHiddenWorkspaceApps: false, hideVisibleApps: false}, overrides: {}};
 }
 function object(v) { return !!v && typeof v === "object" && !Array.isArray(v); }
 function validAppId(v) { return typeof v === "string" && v.length > 0 && v.length <= 512 && !/[\x00-\x1f]/.test(v); }
@@ -36,7 +37,7 @@ function settings(patch, base) {
         else if (k === "minimizeMode") valid = ["active", "all", "off"].indexOf(v) !== -1;
         else if (k === "folderColor") valid = Folders.colors.indexOf(v) !== -1;
         else if (k === "urgentSoundName") valid = Parity.soundNames.indexOf(v) >= 0;
-        else if (["followActiveOutput", "reserveSpace", "showAppNames", "advancedTooltips", "launchBounce", "reducedMotion", "autoHide", "intelligentHide", "previewsEnabled", "livePreviews", "showUrgentHint", "urgentOnNotification", "urgentSound", "showAppsButton"].indexOf(k) >= 0) valid = typeof v === "boolean";
+        else if (["followActiveOutput", "reserveSpace", "showAppNames", "advancedTooltips", "launchBounce", "reducedMotion", "autoHide", "intelligentHide", "previewsEnabled", "livePreviews", "showUrgentHint", "urgentOnNotification", "urgentSound", "showAppsButton", "showHiddenWorkspaceApps", "hideVisibleApps"].indexOf(k) >= 0) valid = typeof v === "boolean";
         else if (k === "monitorMode") valid = ["all", "selected"].indexOf(v) !== -1;
         else if (k === "selectedOutputs") valid = Array.isArray(v) && v.length <= 64 && v.every((n, i) =>
             typeof n === "string" && n.trim().length > 0 && n.length <= 256 && !/[\x00-\x1f]/.test(n) && v.indexOf(n) === i);

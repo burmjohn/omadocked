@@ -66,6 +66,28 @@ class ConfigStoreTests(unittest.TestCase):
         third = self.helper()
         self.assertTrue(third.ready["ok"])
 
+    def test_busy_helper_supplies_saved_snapshot_without_mutation(self):
+        first = self.helper()
+        saved = '{"version":2,"pins":["editor"],"settings":{"minimizeMode":"off"}}\n'
+        self.assertTrue(first.request({"id": 1, "op": "commit", "expected": "", "missing": True,
+                                       "replacement": saved, "fallback": saved})["ok"])
+        backup = Path(str(self.path) + ".lkg").read_bytes()
+        second = self.helper()
+        self.assertEqual(second.ready, {"type": "ready", "ok": False, "error": "busy",
+                                        "snapshot": True, "text": saved, "missing": False})
+        self.assertEqual(self.path.read_text(), saved)
+        self.assertEqual(Path(str(self.path) + ".lkg").read_bytes(), backup)
+        self.assertIsNone(first.proc.poll())
+
+    def test_busy_helper_does_not_publish_unsafe_snapshot(self):
+        first = self.helper()
+        self.path.symlink_to(Path(self.temp.name) / "private-other.json")
+        self.path.resolve().write_text('{"version":2,"pins":["not-owned-target"]}')
+        second = self.helper()
+        self.assertEqual(second.ready, {"type": "ready", "ok": False, "error": "busy"})
+        self.assertFalse(Path(str(self.path) + ".lkg").exists())
+        self.assertIsNone(first.proc.poll())
+
     def test_commit_readback_lkg_and_recovery_are_one_helper_transaction(self):
         helper = self.helper()
         one = '{"version":2,"pins":["one"]}\n'

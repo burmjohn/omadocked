@@ -9,6 +9,20 @@ TestCase {
     width: 1200; height: 1000
     Component { id: component; DockView { reducedMotion: true; autoHide: false; availableOutputs: ["DP-1", "DP-2", "HDMI-A-1"]; monitorMode: "selected"; selectedOutputs: ["DP-1", "DP-2"] } }
     SignalSpy { id: monitors; signalName: "monitorsRequested" }
+    function test_stock_host_requirements_are_visible_beside_settings() {
+        const v = createTemporaryObject(component, test);
+        v.settingsOpen = true;
+        const previews = findChild(v, "preview-capability-status");
+        verify(previews !== null, "preview preference must not imply host capability");
+        verify(previews.text.indexOf("privacy authority") >= 0);
+        verify(previews.text.indexOf("stock Omarchy") >= 0);
+        const notifications = findChild(v, "notification-capability-status");
+        verify(notifications !== null);
+        verify(notifications.text.indexOf("host notification/DND access") >= 0);
+        v.notificationStatus = "available";
+        verify(notifications.text.indexOf("Notifications: available") >= 0);
+        compare(v.previewsEnabled, true, "saved intent remains independent of host support");
+    }
     function test_scroll_during_monitor_press_cancels_click() {
         const v = createTemporaryObject(component, test);
         v.settingsOpen = true; wait(30);
@@ -19,6 +33,71 @@ TestCase {
         mouseRelease(check, 50, 15); wait(30);
         compare(monitors.count, 0, "scroll gesture must cancel pending monitor click");
         compare(check.checked, true);
+    }
+    function test_wheelCancelsSliderPress_data() {
+        const rows = [];
+        for (const name of ["size-slider", "transparency-slider", "zoom-size-slider", "wave-width-slider", "tooltip-delay-slider", "reveal-delay-slider"])
+            for (const compact of [false, true]) rows.push({tag:name + (compact ? "-compact" : ""), control:name, compact:compact});
+        return rows;
+    }
+    function test_wheelCancelsSliderPress(data) {
+        const v = createTemporaryObject(component, test, {availableWidth:data.compact ? 600 : 1366, availableHeight:data.compact ? 600 : 1080, reducedMotion:false});
+        v.settingsOpen = true; wait(30);
+        const c = findChild(v, data.control);
+        verify(c && c.enabled);
+        let commits = 0;
+        c.commitRequested.connect(() => ++commits);
+        const saved = c.committedValue;
+        c.forceActiveFocus(); wait(30);
+        mousePress(c, c.width * .5, c.height / 2);
+        mouseMove(c, c.width * .8, c.height / 2);
+        verify(c.pressed && c.tracking);
+        const p = c.mapToItem(v, c.width * .8, c.height / 2);
+        mouseWheel(v, p.x, p.y, 0, -120);
+        mouseRelease(v, p.x, p.y);
+        compare(commits, 0);
+        compare(c.value, saved);
+    }
+    function test_wheelCancelsActionPress_data() {
+        const rows = [];
+        for (const row of [{tag:"auto-hide", control:"auto-hide", signal:"autoHideRequested"},
+            {tag:"sample", control:"urgent-sound-sample", signal:"soundSampleRequested"}])
+            for (const compact of [false, true]) rows.push(Object.assign({}, row, {tag:row.tag + (compact ? "-compact" : ""), compact:compact}));
+        return rows;
+    }
+    function test_wheelCancelsActionPress(data) {
+        const v = createTemporaryObject(component, test, {availableWidth:data.compact ? 600 : 1366, availableHeight:data.compact ? 600 : 1080, urgentSound:true, urgentSoundName:"complete", soundSampleStatus:"ready"});
+        v.settingsOpen = true; wait(30);
+        const c = findChild(v, data.control);
+        let actions = 0;
+        v[data.signal].connect(() => ++actions);
+        c.forceActiveFocus(); wait(30);
+        mousePress(c, c.width / 2, c.height / 2);
+        verify(c.pressed);
+        const p = c.mapToItem(v, c.width / 2, c.height / 2);
+        mouseWheel(v, p.x, p.y, 0, -120);
+        mouseRelease(v, p.x, p.y);
+        compare(actions, 0);
+        c.forceActiveFocus(); keyClick(Qt.Key_Space);
+        compare(actions, 1, "keyboard activation survives cancellation");
+        c.Accessible.pressAction();
+        compare(actions, 2, "accessibility activation survives cancellation");
+    }
+    function test_minimizeGroupHasVisibleLabel() {
+        const v = createTemporaryObject(component, test, {availableWidth:360, availableHeight:600, minimizeMode:"off"});
+        v.settingsOpen = true; wait(30);
+        const label = findChild(v, "minimize-label");
+        verify(label !== null, "Active / All / Off need a visible group heading");
+        compare(label.text, "Click to minimize");
+        verify(label.visible);
+        const button = findChild(v, "minimize-off");
+        button.forceActiveFocus(); wait(30);
+        const scroll = findChild(v, "settings-scroll");
+        const p = button.mapToItem(scroll, 0, 0);
+        verify(p.y >= 0 && p.y + button.height <= scroll.height);
+        const q = label.mapToItem(button, 0, label.height);
+        verify(q.y <= 0, "heading must not overlap controls");
+        compare(v.minimizeMode, "off");
     }
     function test_explicit_buttons_still_edit() {
         const v = createTemporaryObject(component, test); v.settingsOpen = true; wait(30);
@@ -65,7 +144,7 @@ TestCase {
         verify(s.contentHeight <= s.height, "normal settings should fit without scrolling: " + s.contentHeight);
     }
     function test_wheel_never_edits_controls_data() {
-        return ["size-slider", "transparency-slider", "folder-color", "reduced-motion", "auto-hide", "output-DP-1", "output-HDMI-A-1"].map(name => ({tag: name, control: name}));
+        return ["size-slider", "transparency-slider", "folder-color", "reduced-motion", "auto-hide", "output-DP-1", "output-HDMI-A-1", "show-hidden-workspace-apps", "hide-visible-apps"].map(name => ({tag: name, control: name}));
     }
     function test_wheel_never_edits_controls(data) {
         const v = createTemporaryObject(component, test, {availableWidth: 600, availableHeight: 600});

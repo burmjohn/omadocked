@@ -30,7 +30,7 @@ def safe_regular(info, private=False):
             and info.st_nlink == 1 and (not private or not info.st_mode & 0o077))
 
 
-def open_parent(path):
+def open_parent(path, create=True):
     parts = path.split("/")[1:-1]
     fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
@@ -38,6 +38,8 @@ def open_parent(path):
             try:
                 child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=fd)
             except FileNotFoundError:
+                if not create:
+                    raise
                 os.mkdir(part, 0o700, dir_fd=fd)
                 # Persist the newly created ancestor entry, not just the final
                 # config directory. Otherwise main fsync cannot guarantee reachability.
@@ -55,6 +57,45 @@ def open_parent(path):
     except BaseException:
         os.close(fd)
         raise
+
+
+def read_regular(directory, target, durable=False):
+    try:
+        fd = os.open(target, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    except FileNotFoundError:
+        return "", True
+    try:
+        info = os.fstat(fd)
+        if not safe_regular(info):
+            raise ValueError("unsafe")
+        chunks = []
+        while True:
+            data = os.read(fd, 65536)
+            if not data:
+                break
+            chunks.append(data)
+            if sum(map(len, chunks)) > 4 * 1024 * 1024:
+                raise ValueError("unsafe")
+        if durable:
+            os.fsync(fd)
+        return b"".join(chunks).decode("utf-8"), False
+    finally:
+        os.close(fd)
+
+
+def busy_snapshot(path):
+    """Observational checked bytes only; never a writer or durability receipt."""
+    if not valid_path(path):
+        raise ValueError("unsafe")
+    directory = open_parent(path, create=False)
+    try:
+        name = path.rsplit("/", 1)[1]
+        text, missing = read_regular(directory, name)
+        if missing or read_regular(directory, name) != (text, missing):
+            return {}
+        return {"snapshot": True, "text": text, "missing": False}
+    finally:
+        os.close(directory)
 
 
 class Store:
@@ -87,28 +128,7 @@ class Store:
         os.close(self.directory)
 
     def read(self, name=None, durable=False):
-        target = name or self.name
-        try:
-            fd = os.open(target, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.directory)
-        except FileNotFoundError:
-            return "", True
-        try:
-            info = os.fstat(fd)
-            if not safe_regular(info):
-                raise ValueError("unsafe")
-            chunks = []
-            while True:
-                data = os.read(fd, 65536)
-                if not data:
-                    break
-                chunks.append(data)
-                if sum(map(len, chunks)) > 4 * 1024 * 1024:
-                    raise ValueError("unsafe")
-            if durable:
-                os.fsync(fd)
-            return b"".join(chunks).decode("utf-8"), False
-        finally:
-            os.close(fd)
+        return read_regular(self.directory, name or self.name, durable)
 
     def atomic_write(self, name, text):
         if not isinstance(text, str) or len(text.encode("utf-8")) > 4 * 1024 * 1024:
@@ -258,7 +278,12 @@ def main(argv):
     try:
         store = Store(argv[1])
     except BlockingIOError:
-        emit({"type": "ready", "ok": False, "error": "busy"})
+        receipt = {"type": "ready", "ok": False, "error": "busy"}
+        try:
+            receipt.update(busy_snapshot(argv[1]))
+        except (OSError, UnicodeError, ValueError):
+            pass  # Unsafe/unreadable bytes are never published.
+        emit(receipt)
         return 3
     except (OSError, UnicodeError, ValueError):
         emit({"type": "ready", "ok": False, "error": "unsafe"})

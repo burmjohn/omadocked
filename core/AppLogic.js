@@ -33,27 +33,25 @@ function hostFromClass(appId) {
 function domainMatch(index, appId) {
     const host = hostFromClass(appId);
     if (!host) return null;
-    const skip = {www: true, web: true, com: true, org: true, net: true, app: true, default: true};
-    const labels = host.split(".").filter(function(label) {
-        return label && label.length > 2 && !skip[label];
-    });
-    if (!labels.length) return null;
-    const hits = [];
-    for (const id in index.ids) {
-        const entry = index.ids[id];
-        if (!entry) continue;
-        const hay = String(entry.id + " " + entry.name).toLowerCase();
-        if (labels.some(function(label) { return hay.indexOf(label.toLowerCase()) >= 0; }))
-            hits.push(entry);
-    }
-    return hits.length === 1 ? hits[0] : null;
+    // Explicit known PWA metadata only. Generic domain labels/display names
+    // cannot establish membership (music.youtube.com is not org.gnome.Music).
+    const known = {"music.youtube.com": "YouTube Music",
+                   "messages.google.com": "Google Messages",
+                   "web.whatsapp.com": "WhatsApp"};
+    return Object.prototype.hasOwnProperty.call(known, host) ? index.ids[known[host]] || null : null;
 }
 function matchIndexed(index, appId, overrides) {
     if (overrides && Object.prototype.hasOwnProperty.call(overrides, appId)) return index.ids[overrides[appId]] || null;
-    if (index.ids[appId]) return index.ids[appId];
-    if (typeof appId === "string" && appId.endsWith(".desktop") && index.ids[appId.slice(0, -8)]) return index.ids[appId.slice(0, -8)];
+    // A present null is ambiguous, not absent: do not fall through to aliases.
+    if (Object.prototype.hasOwnProperty.call(index.ids, appId)) return index.ids[appId];
+    if (typeof appId === "string" && appId.endsWith(".desktop")
+        && Object.prototype.hasOwnProperty.call(index.ids, appId.slice(0, -8))) return index.ids[appId.slice(0, -8)];
     if (Object.prototype.hasOwnProperty.call(index.classes, appId)) return index.classes[appId];
-    const aliases = {"brave-messages.google.com__web_conversations-Default": "Google Messages",
+    // Known desktop/window metadata mismatches only; never case-fold launch IDs.
+    // T3's reverse-DNS helper entry is NoDisplay; use its visible t3code launcher.
+    // ChatGPT's XWayland class differs in case and has no StartupWMClass entry.
+    const aliases = {"Chatgpt": "chatgpt", "com.t3tools.T3Code": "t3code",
+                     "brave-messages.google.com__web_conversations-Default": "Google Messages",
                      "brave-web.whatsapp.com__-Default": "WhatsApp"};
     if (Object.prototype.hasOwnProperty.call(aliases, appId) && index.ids[aliases[appId]])
         return index.ids[aliases[appId]];
@@ -88,4 +86,72 @@ function build(entries, windows, pins, previous, overrides) {
     const stable = previous.filter(id => rest.indexOf(id) !== -1);
     rest.forEach(id => { if (stable.indexOf(id) === -1) stable.push(id); });
     return pins.concat(stable).filter(id => id !== "menu" && id !== "omarchy-menu").map(id => groups[id]);
+}
+
+// Synthetic shelf divider for unpinned apps that are not on any displayed workspace.
+const HIDDEN_WORKSPACES_ID = "hidden-workspaces";
+
+function hiddenWorkspacesSeparator() {
+    return {id: HIDDEN_WORKSPACES_ID, name: "Other workspaces", icon: "", running: false, active: false,
+        pinned: false, canPin: false, windowCount: 0, pending: false, kind: "separator",
+        canNewInstance: false, canEdit: false, canDuplicate: false, canRemove: false,
+        pinReason: "", windows: []};
+}
+
+// Same visibility rule as overlap: mapped, not hidden, on a monitor's active
+// workspace or shown special workspace. Pinned clients count if their output exists.
+function windowOnScreen(window, monitors) {
+    if (!window || window.mapped !== true || window.hidden === true) return false;
+    const outputs = monitors || [];
+    if (window.pinned === true)
+        return outputs.some(m => m && m.name === window.monitor);
+    if (window.workspace === null || window.workspace === undefined) return false;
+    return outputs.some(m => m && (m.workspace === window.workspace
+        || (m.special !== 0 && m.special === window.workspace)));
+}
+
+function markScreenPresence(item, windows) {
+    const members = (item && item.windows || []).map(key => (windows || []).find(w => w.key === key)).filter(Boolean);
+    let visible = false, hidden = false, unknown = false;
+    members.forEach(w => {
+        if (w.viewable === true) visible = true;
+        else if (w.viewable === false) hidden = true;
+        else unknown = true;
+    });
+    const next = item || {};
+    next.onScreen = visible;
+    next.offScreen = !visible && !unknown && hidden;
+    return next;
+}
+
+function isRunningApplication(item) {
+    return !!(item && item.running && !item.pinned && !item.canEdit
+        && (!item.kind || item.kind === "application")
+        && item.id !== HIDDEN_WORKSPACES_ID
+        && !(typeof item.id === "string" && item.id.indexOf("launcher:") === 0));
+}
+
+function shelfItems(items, options) {
+    const showHidden = !!(options && options.showHiddenWorkspaceApps === true);
+    const hideVisible = !!(options && options.hideVisibleApps === true);
+    const list = items || [];
+    const kept = [];
+    const hidden = [];
+    for (let i = 0; i < list.length; ++i) {
+        const item = list[i];
+        if (!item || item.id === HIDDEN_WORKSPACES_ID) continue;
+        if (!isRunningApplication(item) || (!showHidden && !hideVisible)) {
+            kept.push(item);
+            continue;
+        }
+        if (item.onScreen === true) {
+            if (!hideVisible) kept.push(item);
+        } else if (item.offScreen === true) {
+            if (showHidden) hidden.push(item);
+            else kept.push(item);
+        } else kept.push(item);
+    }
+    if (showHidden && hidden.length)
+        return kept.concat([hiddenWorkspacesSeparator()], hidden);
+    return kept;
 }

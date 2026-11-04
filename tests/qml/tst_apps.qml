@@ -130,4 +130,82 @@ TestCase {
         verify(!items[2].canPin);
         verify(items[2].pinReason.length > 0);
     }
+    function test_workspaceShelfSettingsDefaultOffAndStayBoolean() {
+        compare(Config.defaults().settings.showHiddenWorkspaceApps, false);
+        compare(Config.defaults().settings.hideVisibleApps, false);
+        const enabled = Config.defaults();
+        enabled.settings.showHiddenWorkspaceApps = true;
+        enabled.settings.hideVisibleApps = true;
+        const parsed = Config.parse(JSON.stringify(enabled));
+        compare(parsed.error, "");
+        compare(parsed.config.settings.showHiddenWorkspaceApps, true);
+        compare(parsed.config.settings.hideVisibleApps, true);
+        for (const value of ["true", 1, null]) {
+            const bad = Config.defaults();
+            bad.settings.hideVisibleApps = value;
+            verify(Config.parse(JSON.stringify(bad)).error.length > 0, JSON.stringify(value));
+        }
+    }
+    function test_windowOnScreenMatchesActiveWorkspaceAndSpecial() {
+        const monitors = [{name: "DP-1", workspace: 1, special: 0},
+                          {name: "HDMI-A-1", workspace: 3, special: -99}];
+        verify(Apps.windowOnScreen({mapped: true, hidden: false, workspace: 1, monitor: "DP-1"}, monitors));
+        verify(Apps.windowOnScreen({mapped: true, hidden: false, workspace: -99, monitor: "HDMI-A-1"}, monitors));
+        verify(!Apps.windowOnScreen({mapped: true, hidden: false, workspace: 5, monitor: "DP-1"}, monitors));
+        verify(!Apps.windowOnScreen({mapped: false, hidden: false, workspace: 1, monitor: "DP-1"}, monitors));
+        verify(!Apps.windowOnScreen({mapped: true, hidden: true, workspace: 1, monitor: "DP-1"}, monitors));
+        verify(Apps.windowOnScreen({mapped: true, hidden: false, pinned: true, workspace: 5, monitor: "DP-1"}, monitors));
+        verify(!Apps.windowOnScreen({mapped: true, hidden: false, pinned: true, workspace: 5, monitor: "DP-9"}, monitors));
+    }
+    function test_shelfItemsKeepCurrentOrderWhenBothFiltersOff() {
+        const items = [
+            {id: "pinned", pinned: true, running: true, onScreen: true, kind: "application"},
+            {id: "visible", pinned: false, running: true, onScreen: true, kind: "application"},
+            {id: "hidden", pinned: false, running: true, offScreen: true, kind: "application"}
+        ];
+        compare(Apps.shelfItems(items, {}).map(i => i.id), ["pinned", "visible", "hidden"]);
+        compare(Apps.shelfItems(items, {showHiddenWorkspaceApps: false, hideVisibleApps: false}).map(i => i.id),
+                ["pinned", "visible", "hidden"]);
+    }
+    function test_hideVisibleAppsOmitsOnScreenUnpinnedAndKeepsPins() {
+        const items = [
+            {id: "pinned", pinned: true, running: true, onScreen: true, kind: "application"},
+            {id: "folder", kind: "folder", canEdit: true, running: false},
+            {id: "visible", pinned: false, running: true, onScreen: true, kind: "application"},
+            {id: "hidden", pinned: false, running: true, offScreen: true, kind: "application"},
+            {id: "unknown", pinned: false, running: true, kind: "application"}
+        ];
+        compare(Apps.shelfItems(items, {hideVisibleApps: true}).map(i => i.id),
+                ["pinned", "folder", "hidden", "unknown"]);
+    }
+    function test_showHiddenWorkspaceAppsMovesOffScreenUnpinnedBehindSeparator() {
+        const items = [
+            {id: "pinned", pinned: true, running: true, offScreen: true, kind: "application"},
+            {id: "visible", pinned: false, running: true, onScreen: true, kind: "application"},
+            {id: "hidden-b", pinned: false, running: true, offScreen: true, kind: "application"},
+            {id: "hidden-a", pinned: false, running: true, offScreen: true, kind: "application"}
+        ];
+        const ids = Apps.shelfItems(items, {showHiddenWorkspaceApps: true}).map(i => i.id);
+        compare(ids, ["pinned", "visible", Apps.HIDDEN_WORKSPACES_ID, "hidden-b", "hidden-a"]);
+        compare(Apps.shelfItems(items, {showHiddenWorkspaceApps: true})[2].kind, "separator");
+    }
+    function test_bothWorkspaceFiltersShowOnlyOtherWorldUnpinnedApps() {
+        const items = [
+            {id: "pinned", pinned: true, running: true, onScreen: true, kind: "application"},
+            {id: "visible", pinned: false, running: true, onScreen: true, kind: "application"},
+            {id: "hidden", pinned: false, running: true, offScreen: true, kind: "application"}
+        ];
+        compare(Apps.shelfItems(items, {showHiddenWorkspaceApps: true, hideVisibleApps: true}).map(i => i.id),
+                ["pinned", Apps.HIDDEN_WORKSPACES_ID, "hidden"]);
+    }
+    function test_mixedAndUnknownAppsStayInMainListAndEmptyHiddenOmitsSeparator() {
+        const mixed = {id: "mixed", pinned: false, running: true, onScreen: true, kind: "application"};
+        const unknown = {id: "unknown", pinned: false, running: true, kind: "application"};
+        const visible = {id: "visible", pinned: false, running: true, onScreen: true, kind: "application"};
+        compare(Apps.shelfItems([mixed, unknown], {showHiddenWorkspaceApps: true}).map(i => i.id),
+                ["mixed", "unknown"]);
+        compare(Apps.shelfItems([mixed, unknown], {showHiddenWorkspaceApps: true, hideVisibleApps: true}).map(i => i.id),
+                ["unknown"]);
+        compare(Apps.shelfItems([visible], {showHiddenWorkspaceApps: true}).map(i => i.id), ["visible"]);
+    }
 }

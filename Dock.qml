@@ -188,6 +188,8 @@ Item {
     readonly property bool reducedMotion: appService.settings.reducedMotion
     readonly property bool showAppNames: appService.settings.showAppNames
     readonly property bool showAppsButton: appService.settings.showAppsButton !== false
+    readonly property bool showHiddenWorkspaceApps: appService.settings.showHiddenWorkspaceApps === true
+    readonly property bool hideVisibleApps: appService.settings.hideVisibleApps === true
     readonly property bool advancedTooltips: appService.settings.advancedTooltips
     readonly property bool launchBounce: appService.settings.launchBounce
     readonly property int tooltipDelay: appService.settings.tooltipDelay
@@ -274,6 +276,8 @@ Item {
     function setReducedMotion(value: bool): bool { return appService.configure({reducedMotion: value}); }
     function setShowAppNames(value: bool): bool { return appService.configure({showAppNames: value}); }
     function setShowAppsButton(value: bool): bool { return appService.configure({showAppsButton: value}); }
+    function setShowHiddenWorkspaceApps(value: bool): bool { return appService.configure({showHiddenWorkspaceApps: value}); }
+    function setHideVisibleApps(value: bool): bool { return appService.configure({hideVisibleApps: value}); }
     function setAdvancedTooltips(value: bool): bool { return appService.configure({advancedTooltips: value}); }
     function setLaunchBounce(value: bool): bool { return appService.configure({launchBounce: value}); }
     function configureDelays(patch: var): int { return appService.configure(patch); }

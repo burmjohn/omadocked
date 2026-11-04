@@ -25,6 +25,17 @@ TestCase {
         compare(view.reservedHeight, zone, "No popup/overlap/hover/status layout feedback");
         view.reserveSpace = false; compare(view.reservedHeight, 0);
     }
+    function test_auto_reservation_uses_committed_resolved_size() {
+        const view = createTemporaryObject(factory, this, {iconSize:0, reserveSpace:true});
+        const expected = Math.ceil(view.resolvedIconSize * (view.zoomSize / 100 + 20 / 44 * (view.zoomSize / 100 - 1)) + 26);
+        compare(view.reservedHeight, expected);
+        view.settingsOpen = true;
+        const slider = findChild(view, "size-slider");
+        slider.value = 72;
+        compare(view.reservedHeight, expected);
+        view.visibilityState = "hidden";
+        compare(view.reservedHeight, expected);
+    }
     function test_setting_control() {
         const view = createTemporaryObject(factory, this);
         view.settingsManaged = true;

@@ -8,6 +8,8 @@ Item {
     id: chooser
     required property var windows
     property bool previewsEnabled: true
+    // On short outputs, preserve navigation and a full actionable row first.
+    readonly property bool showPreview: previewsEnabled && height >= 254
     property Component previewComponent
     readonly property string previewKey: hasKey(selectionKey) ? selectionKey : ""
     readonly property var groupCard: Preview.buildCards("all", windows.map(w => ({
@@ -136,7 +138,7 @@ Item {
     }
     Loader {
         id: previewLoader
-        active: chooser.previewsEnabled
+        active: chooser.showPreview
         x: 0; y: 44; width: chooser.width; height: 160
         sourceComponent: PreviewCard {
             objectName: "window-preview-card"
@@ -150,7 +152,7 @@ Item {
         id: list
         objectName: "window-list"
         anchors.fill: parent
-        anchors.topMargin: chooser.previewsEnabled ? 212 : 44
+        anchors.topMargin: chooser.showPreview ? 212 : 44
         clip: true
         spacing: 6
         model: chooser.windows

@@ -27,6 +27,13 @@ class WindowRestoreIntegration(unittest.TestCase):
         extra = '''
     id: root
     property var controller: bridge
+    property var requestedGroup: null
+    Connections {
+        target: view
+        function onRestoreApplicationRequested(appId, keys, mode) {
+            root.requestedGroup = {appId:appId, keys:keys.slice(), mode:mode};
+        }
+    }
     QtObject { id: surfaces; property var instances: [view] }
     QtObject { id: bridge; property var appService: apps
 METHODS
@@ -47,6 +54,15 @@ HANDLERS
     PreviewIntegration { view: view; controller: previewController; mapped: true }
 '''.replace('METHODS', methods).replace('HANDLERS', handlers)
         ipc = '''
+        function invalidGroups(): bool {
+            const key = apps.windowGroups.one[0].key;
+            return [null, key, {}, {length:1, 0:key}, [key,key], [42], ["missing"]].every(keys =>
+                apps.restoreApplication("one",keys,"here") === 0 && !apps.closeApplication("one",keys));
+        }
+        function closeGroup(): bool {
+            view.closeApplicationRequested("one", apps.windowGroups.one.map(w => w.key));
+            return !apps.windowGroups.one || apps.windowGroups.one.length === 0;
+        }
         function group(): string {
             view.openContext(view.order.indexOf("one"));
             finder.wait(20);
@@ -55,7 +71,8 @@ HANDLERS
             finder.mousePress(view,point.x,point.y);
             const pressed=button.pressed;
             finder.mouseRelease(view,point.x,point.y);
-            return JSON.stringify({pressed:pressed,closed:view.contextIndex<0});
+            return JSON.stringify({pressed:pressed,closed:view.contextIndex<0,requested:root.requestedGroup,
+                transaction:apps._parkingActive ? apps._parkingActive.publicId : 0});
         }
         function row(key: string): string {
             if (!view.openWindowChooser("one")) return JSON.stringify({opened:false});
@@ -87,13 +104,18 @@ HANDLERS
             self.fixture.wait_revision(before)
 
     def test_group_context_uses_production_bridges_and_exact_receipts(self):
+        self.assertTrue(self.call('invalidGroups'))
         before=self.call('snapshot')['revision']
         result=self.call('group')
+        assert isinstance(result, dict), result
         self.assertTrue(result['pressed'] and result['closed'])
+        self.assertEqual(result['requested'], {'appId':'one','keys':self.keys,'mode':'here'})
+        self.assertGreater(result['transaction'], 0, result)
         done=self.fixture.wait_revision(before,2)
         self.assertEqual(done['parked'],[])
         self.assertTrue(done['last']['ok'])
         self.assertEqual(json.loads(self.fixture.state.read_text())['clients'][2]['workspace']['name'],'1')
+        self.assertTrue(self.call('closeGroup'))
 
     def test_clicked_non_fifo_parked_row_restores_exact_key_after_receipt(self):
         before = self.call('snapshot')

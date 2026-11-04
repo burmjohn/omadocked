@@ -88,9 +88,15 @@ HANDLER
                     deadline=time.monotonic()+3
                     while not receipts.exists() or len(receipts.read_text().splitlines())<5:
                         self.assertLess(time.monotonic(),deadline); time.sleep(.02)
+                    from lua_compositor import execute_focus
+                    workspace_requests = [json.loads(line)[2] for line in receipts.read_text().splitlines()
+                                          if json.loads(line)[0] == 'hyprctl']
+                    self.assertCountEqual([workspace for code in workspace_requests
+                                           for workspace in execute_focus(code)], ['e+1', 'e-1'])
+                    self.assertEqual(execute_focus('hl.dsp.focus({workspace="e+1"})'), [])
                     expected=[['omarchy-menu','toggle','root'],['omarchy-menu','toggle','root'],['omarchy-launch-terminal'],
-                              ['hyprctl','eval','hl.dsp.focus({ workspace = "e+1" })'],
-                              ['hyprctl','eval','hl.dsp.focus({ workspace = "e-1" })']]
+                              ['hyprctl','eval','hl.dispatch(hl.dsp.focus({ workspace = "e+1" }))'],
+                              ['hyprctl','eval','hl.dispatch(hl.dsp.focus({ workspace = "e-1" }))']]
                     self.assertCountEqual([json.loads(l) for l in receipts.read_text().splitlines()],expected)
                     self.assertEqual(call('click',2),{'pressed':True,'settings':False})
                     for kind,delta in [('wheel',0),('wheel',float('nan')),('bad',0),('right',0)]:

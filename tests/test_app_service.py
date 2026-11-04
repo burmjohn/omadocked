@@ -77,6 +77,7 @@ class AppServiceTests(unittest.TestCase):
             shutil.copytree(ROOT / "services", self.root / "services")
         (self.root / "shell.qml").write_text(SHELL)
         self.config = self.root / "config" / "pins.json"
+        self.owned_roots = ()
         self.proc = None
 
     def tearDown(self):
@@ -97,7 +98,7 @@ class AppServiceTests(unittest.TestCase):
             for issue in ("ReferenceError:", "TypeError:", "Binding loop", "Failed to load configuration", "Cannot assign"):
                 self.assertNotIn(issue, output)
 
-    def start(self, test_mode="1", extra_env=None, wrapped=True, wrapper=None):
+    def start(self, test_mode="1", extra_env=None, wrapped=True, wrapper=None, expect_ready=True):
         required = backend_for(self.id())
         env = dict(safety.fixture_environment(), OMADOCKED_TEST_MODE=test_mode, OMADOCKED_CONFIG_PATH=str(self.config),
                    OMADOCKED_PARKING_DISABLED="1", QS_NO_RELOAD_POPUP="1", QT_QPA_PLATFORM="wayland" if required == "native" else "offscreen")
@@ -108,7 +109,8 @@ class AppServiceTests(unittest.TestCase):
         command = ["/usr/bin/python3", str(wrapper or ROOT / "tools/preview.py"), "--"] if wrapped else ["quickshell"]
         try:
             self.proc = safety.spawn(command + ["-p", str(self.root / "shell.qml"), "--no-color"],
-                                         required=required, root=self.root, env=env, stdout=self.log, stderr=subprocess.STDOUT)
+                                         required=required, root=self.root, owned_roots=self.owned_roots,
+                                         env=env, stdout=self.log, stderr=subprocess.STDOUT)
         except BaseException:
             self.log.close()
             raise
@@ -116,7 +118,7 @@ class AppServiceTests(unittest.TestCase):
         while time.monotonic() < deadline:
             self.assertIsNone(self.proc.poll(), (self.root / "runtime.log").read_text())
             result = self.call("snapshot", check=False)
-            if result and result.get("ready"):
+            if isinstance(result, dict) and (result.get("ready") if expect_ready else result.get("error")):
                 return result
             time.sleep(.05)
         self.fail((self.root / "runtime.log").read_text())
@@ -482,7 +484,10 @@ class AppServiceTests(unittest.TestCase):
         other.setUp()
         self.addCleanup(other.tearDown)
         other.config = self.config
-        state = other.start()
+        other.owned_roots = (self.root,)
+        state = other.start(expect_ready=False)
+        self.assertFalse(state["ready"])
+        self.assertIn("saved configuration unavailable", state["error"])
         self.assertIn("another instance", state["error"])
         self.assertFalse(other.call("configure", '{"iconSize":60}'))
         self.assertFalse(self.config.exists())
@@ -493,7 +498,7 @@ class AppServiceTests(unittest.TestCase):
         other.stop()
         state = other.start()
         self.assertIn("another instance", state["error"])
-        self.assertEqual(state["settings"]["iconSize"], 44)
+        self.assertEqual(state["settings"]["iconSize"], 56)
         self.assertFalse(other.call("configure", '{"iconSize":60}'))
         self.assertEqual(Path(str(self.config) + ".lkg").read_bytes(), committed)
         other.stop()
@@ -566,6 +571,7 @@ class AppServiceTests(unittest.TestCase):
         other.setUp()
         self.addCleanup(other.tearDown)
         other.config = self.config
+        other.owned_roots = (self.root,)
         self.assertEqual(other.start()["error"], "")
         self.assertTrue(other.call("configure", '{"iconSize":60}'))
 
@@ -644,11 +650,13 @@ class AppServiceTests(unittest.TestCase):
         self.config.write_text(before)
         state = self.start()
         self.assertEqual(state.get("settings"), {"iconSize": 44, "transparency": 0, "shape": "rounded", "itemSpacing": 4,
-                         "backgroundColor": "theme", "themeOpacity": False, "zoomSize": 145, "waveWidth": 25, "motionMode": "wave",
+                         "backgroundColor": "theme", "themeOpacity": False, "badgePosition": "bottom-right",
+                         "badgeBackgroundColor": "theme", "badgeTextColor": "theme", "zoomSize": 145, "waveWidth": 25, "motionMode": "wave",
                          "reducedMotion": False, "showAppNames": True, "advancedTooltips": False, "launchBounce": True, "tooltipDelay": 450, "revealDelay": 160, "autoHide": True, "intelligentHide": False, "minimizeMode": "active",
                          "reserveSpace": False, "followActiveOutput": False, "monitorMode": "all", "selectedOutputs": [], "folderColor": "theme",
                          "previewsEnabled": True, "livePreviews": False, "showUrgentHint": True,
-                         "urgentOnNotification": True, "urgentSound": False, "urgentSoundName": "bell", "showAppsButton": True})
+                         "urgentOnNotification": True, "urgentSound": False, "urgentSoundName": "bell", "showAppsButton": True,
+                         "showHiddenWorkspaceApps": False, "hideVisibleApps": False})
         self.assertEqual(state["launchers"], [])
         self.assertEqual(state["overrides"], {})
         self.assertEqual(self.config.read_text(), before)
@@ -830,7 +838,7 @@ class AppServiceTests(unittest.TestCase):
 
     def test_testmode_refuses_non_temporary_paths_without_reading(self):
         state = self.start(extra_env={"OMADOCKED_CONFIG_PATH": "/home/omadocked-test-must-not-read.json"})
-        self.assertIn("temporary", state["error"])
+        self.assertIn("explicit owned fixture root", state["error"])
         self.assertFalse(state["canRecover"])
         self.seed()
         self.assertFalse(self.call("pin", "one", "true"))
@@ -1041,6 +1049,18 @@ class AppServiceTests(unittest.TestCase):
         state = self.call("snapshot")
         self.assertIn("save failed", state["error"])
         self.assertEqual([i["id"] for i in state["items"] if i["pinned"]], ["one"])
+
+    def test_owned_scratch_configuration_with_encoded_characters_persists(self):
+        self.config = self.root / "owned # % storage" / "pins.json"
+        self.start()
+        self.seed()
+        self.assertTrue(self.call("pin", "one", "true"))
+        self.assertEqual(json.loads(self.config.read_text())["pins"], ["one"])
+        self.stop()
+        state = self.start()
+        assert isinstance(state, dict)
+        self.assertEqual(state["error"], "")
+        self.assertTrue(next(i for i in state["items"] if i["id"] == "one")["pinned"])
 
     def test_test_mode_default_empty_and_memory_only(self):
         (self.root / "services" / "config_store.py").unlink()

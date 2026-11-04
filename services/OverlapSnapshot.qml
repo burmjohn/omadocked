@@ -112,7 +112,15 @@ QtObject {
                 if (connected) { write(command); flush(); }
                 else if (root.socket === channel) root.finish(false, null);
             }
-            onError: if (root.socket === channel) root.finish(false, null)
+            onError: {
+                if (root.socket !== channel) return;
+                // Retire before completing, but do not disconnect inside error:
+                // Quickshell's native error handler still uses its socket after
+                // this signal returns. destroy() defers deletion safely.
+                root.socket = null;
+                channel.destroy();
+                root.finish(false, null);
+            }
             // StdioCollector retains bytes before decoding; SplitParser with an
             // empty marker decodes each read separately and corrupts split UTF-8.
             parser: StdioCollector {

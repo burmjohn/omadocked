@@ -54,7 +54,8 @@ TestCase {
                 v.appearanceSettingsRequested({badgePosition:pos.value});
                 compare(badge.x, (slot.width + (pos.left ? -v.baseIconSize : v.baseIconSize)) / 2 - (pos.left ? 0 : badge.width));
                 compare(badge.y, pos.top ? 0 : v.baseIconSize - badge.height);
-                compare(badge.width, 24); compare(badge.height, 15);
+                compare(badge.width, size <= 32 ? Math.max(14, Math.ceil(badge.contentWidth) + 4) : 24);
+                compare(badge.height, size <= 32 ? 13 : 15);
             }
         }
         v.iconSize = 44;

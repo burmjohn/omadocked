@@ -1,11 +1,32 @@
 """Real Quickshell sockets against an owned Unix server; no compositor requests."""
 import json
 import socket
+import subprocess
 import threading
 import time
+from typing import Any
 import test_app_service as base
 
+
+def socket_call_with_evidence(self, *args, **kwargs) -> Any:
+    """Keep the owned runtime's crash evidence in failures before temp cleanup."""
+    try:
+        return base.AppServiceTests.call(self, *args, **kwargs)
+    except AssertionError as error:
+        # IPC can disappear before Quickshell's crash supervisor exits.
+        # Wait only on this exact owned process, without changing teardown.
+        try:
+            code = self.proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            code = self.proc.poll()
+        output = (self.root / 'runtime.log').read_text()
+        raise self.failureException(
+            f'{error}\nOwned Quickshell pid={self.proc.pid} returncode={code}'
+            f'\nRuntime log before teardown:\n{output}') from error
+
+
 class OverlapSocketTests(base.AppServiceTests):
+    call = socket_call_with_evidence
     def test_owned_socket_receipts_and_cancellation(self):
         self.assertTrue((self.root/'services/OverlapSnapshot.qml').exists(), 'Acknowledged bounded snapshot transport required')
         path=str(self.root/'owned.sock')

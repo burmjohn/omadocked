@@ -1,10 +1,13 @@
 """Test-only pre-spawn boundary. No PATH shims or global subprocess patches."""
 import os
+import json
 from pathlib import Path
 import shutil
 import stat
 import sys
 import subprocess
+import tempfile
+import weakref
 
 ROOT = Path(__file__).resolve().parents[1]
 QUICKSHELL = Path('/usr/bin/quickshell')
@@ -122,10 +125,13 @@ def spawn(argv, *, required=None, env, root, owned_roots=(), **kwargs):
     env = dict(env)
     root = Path(root).resolve()
     roots = (root, *(Path(p).resolve() for p in owned_roots))
+    env['OMADOCKED_TEST_ROOT'] = str(root)
+    env['OMADOCKED_TEST_ROOTS'] = json.dumps([str(path) for path in roots])
     for key in ('DISPLAY', 'QS_CONFIG_PATH', 'QS_CONFIG_NAME', 'QS_MANIFEST'):
         env.pop(key, None)
     if required == 'offscreen':
         env.pop('WAYLAND_DISPLAY', None)
+        env.pop('WAYLAND_SOCKET', None)
     fake = env.get('OMADOCKED_HYPRCTL')
     if fake:
         fake = _owned(fake, roots)
@@ -138,15 +144,31 @@ def spawn(argv, *, required=None, env, root, owned_roots=(), **kwargs):
             _owned(value, roots)
     env.update(QT_QPA_PLATFORMTHEME='', QT_QUICK_BACKEND='software', QML_XHR_ALLOW_FILE_READ='1')
     for key, name in [('HOME', 'home'), ('XDG_CONFIG_HOME', 'config'), ('XDG_DATA_HOME', 'data'),
-                      ('XDG_STATE_HOME', 'state'), ('XDG_CACHE_HOME', 'cache'), ('XDG_RUNTIME_DIR', 'runtime')]:
-        if key == 'XDG_RUNTIME_DIR' and required == 'native':
-            continue
+                      ('XDG_STATE_HOME', 'state'), ('XDG_CACHE_HOME', 'cache')]:
         existing = Path(env.get(key, ''))
         directory = existing if existing.is_absolute() and any(existing.resolve().is_relative_to(r) for r in roots) else root/'.test-environment'/name
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         env[key] = str(directory)
     argv = _command(argv, env)
-    proc = subprocess.Popen(argv, env=env, **kwargs)
+    runtime = None
+    if required == 'offscreen':
+        # Quickshell appends by-id/<instance>/ipc.sock. Fixture roots can be
+        # arbitrarily deep; keep IPC in its own short, private TMPDIR sibling.
+        runtime = tempfile.TemporaryDirectory(prefix='q')
+        socket = Path(runtime.name)/'quickshell/by-id/12345678901/ipc.sock'
+        if len(os.fsencode(socket)) >= 108:
+            runtime.cleanup()
+            raise UnsafeLaunch('TMPDIR is too long for owned Quickshell IPC')
+        env['XDG_RUNTIME_DIR'] = runtime.name
+    try:
+        proc = subprocess.Popen(argv, env=env, **kwargs)
+    except BaseException:
+        if runtime is not None:
+            runtime.cleanup()
+        raise
+    if runtime is not None:
+        setattr(proc, 'test_runtime', runtime)
+        weakref.finalize(proc, runtime.cleanup)
     proc.test_env = env
     return proc
 

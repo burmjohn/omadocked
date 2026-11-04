@@ -219,6 +219,7 @@ FocusScope {
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         Column {
             id: editorColumn
+            enabled: !root.submissionPending
             width: editorScroll.availableWidth - 12
             spacing: 8
             Label {

@@ -49,7 +49,8 @@ class RepairContracts(unittest.TestCase):
             '        if operation == "status":\n            if request["id"] > 1:\n                import time\n                time.sleep(60)'))
         fixture.start();state=fixture.seed();key=state['items'][0]['windows'][0]
         transaction=fixture.call('park','one',key)
-        result=fixture.wait_revision(state['revision'])
+        # Production status verification has a five-second deadline.
+        result=fixture.wait_revision(state['revision'],timeout=7)
         self.assertEqual(result['last']['transactionId'],transaction)
         self.assertFalse(result['last']['ok'])
         self.assertFalse(result['parkingBusy'])

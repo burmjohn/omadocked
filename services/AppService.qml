@@ -14,8 +14,23 @@ QtObject {
     readonly property bool testMode: Quickshell.env("OMADOCKED_TEST_MODE") === "1"
     readonly property string configPath: Quickshell.env("OMADOCKED_CONFIG_PATH") || (testMode ? "" :
         (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/omadocked/pins.json")
-    readonly property bool _pathAllowed: !configPath || (configPath.startsWith("/") && !configPath.split("/").some(p => p === "." || p === "..")
-        && (!testMode || configPath.startsWith("/tmp/") || configPath.startsWith("/var/tmp/")))
+    readonly property bool _pathAllowed: _storagePathAllowed(configPath)
+    function _storagePathAllowed(path) {
+        if (!path) return true;
+        if (!path.startsWith("/") || path.split("/").some(p => p === "." || p === "..")) return false;
+        if (!testMode) return true;
+        let roots = [Quickshell.env("OMADOCKED_TEST_ROOT")];
+        const explicitRoots = Quickshell.env("OMADOCKED_TEST_ROOTS");
+        if (explicitRoots) {
+            try { roots = JSON.parse(explicitRoots); }
+            catch (_) { return false; }
+        }
+        if (!Array.isArray(roots) || !roots.length || roots.some(value => typeof value !== "string")) return false;
+        roots = roots.map(value => value.replace(/\/+$/, ""));
+        return roots.every(value => value.length > 1 && value.startsWith("/")
+            && !value.split("/").some(p => p === "." || p === ".."))
+            && roots.some(value => path.startsWith(value + "/"));
+    }
     readonly property var items: _items
     // Private view data: never add titles/groups to IPC, persistence or logs.
     readonly property var windowGroups: _windowGroups
@@ -64,10 +79,9 @@ QtObject {
     readonly property string parkingJournalPath: Quickshell.env("OMADOCKED_PARKING_DISABLED") === "1" ? "" : (Quickshell.env("OMADOCKED_PARKING_JOURNAL") || (testMode ? "" :
         (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/omadocked/parking.json")
         )
-    readonly property bool _parkingPathAllowed: !parkingJournalPath || (parkingJournalPath.startsWith("/")
-        && !parkingJournalPath.split("/").some(p => p === "." || p === "..")
-        && (!testMode || parkingJournalPath.startsWith("/tmp/") || parkingJournalPath.startsWith("/var/tmp/")))
+    readonly property bool _parkingPathAllowed: _storagePathAllowed(parkingJournalPath)
     property bool _parkingReady: false
+    property bool _parkingDead: false
     property bool _startupRecoveryRequired: false
     property var _parkedWindows: []
     property var _parkedIdentities: ({})
@@ -93,15 +107,12 @@ QtObject {
         stdout: SplitParser { onRead: line => root._parkingMessage(String(line)) }
         onExited: {
             root._parkingLost("helper-stopped");
-            root._actionError = "Window parking helper stopped; parking and recovery disabled";
         }
     }
     property Timer _parkingDeadline: Timer {
-        interval: 3000
+        interval: 5000
         onTriggered: {
             root._parkingLost("helper-timeout");
-            root._parking.running = false;
-            root._actionError = "Window parking helper startup failed; parking and recovery disabled";
         }
     }
     property Timer _parkingMetadataRetry: Timer {
@@ -110,14 +121,17 @@ QtObject {
         onTriggered: root._retryParkingMetadata()
     }
     function _parkingMessage(line) {
+        if (_parkingDead) return;
         let message;
         try { message = JSON.parse(line); }
-        catch (_) { _actionError = "Window parking helper protocol failed"; _parking.running = false; return; }
+        catch (_) { _parkingLost("protocol-failed"); return; }
+        if (!message || typeof message !== "object") { _parkingLost("protocol-failed"); return; }
         if (message.type === "ready") {
+            if (_parkingReady || _parkingActive) return;
             _parkingDeadline.stop();
-            if (!message.ok) { _actionError = "Window parking helper unavailable: " + message.error; return; }
+            if (message.ok !== true) { _parkingLost("helper-unavailable"); return; }
             _parkingActive = {id: ++_parkingSerial, op: "startup-status", publicId: 0};
-            _parkingDeadline.restart();
+            _armParkingDeadline("status");
             _parking.write(JSON.stringify({id:_parkingActive.id, op:"status"}) + "\n");
             return;
         }
@@ -141,10 +155,16 @@ QtObject {
         }
         _parkingResult = message;
         _parkingActive = {id: ++_parkingSerial, op:"status-after-operation", publicId:0, original:_parkingActive};
-        _parkingDeadline.restart();
+        _armParkingDeadline("status");
         _parking.write(JSON.stringify({id:_parkingActive.id, op:"status"}) + "\n");
     }
+    property Timer _parkingKillDeadline: Timer {
+        interval: 500
+        onTriggered: if (root._parking.running) root._parking.signal(9)
+    }
     function _parkingLost(status) {
+        if (_parkingDead) return;
+        _parkingDead = true;
         _parkingReady = false;
         _parkingDeadline.stop();
         _parkingMetadataRetry.stop();
@@ -154,7 +174,13 @@ QtObject {
         _parkingActive = null;
         _parkingResult = null;
         queued.forEach(request => _finishParking(request, {ok:false, status:status}));
-        if (active && active.publicId > 0) _finishParking(active, {ok:false, status:status});
+        if (active && active.publicId > 0) _finishParking(active, {ok:false,
+            status:status + (active.request && !active.request.awaitMetadata ? "-unresolved" : "")});
+        _actionError = "Window parking helper lost: " + status + "; operation outcome may be unresolved; parking and recovery disabled";
+        if (_parking.running) {
+            _parking.signal(15);
+            _parkingKillDeadline.restart();
+        }
     }
     function _rebindLiveKeys() {
         const used = [];
@@ -243,6 +269,16 @@ QtObject {
         _pumpParking();
         return publicId;
     }
+    function _armParkingDeadline(operation) {
+        // parking_store.py allows 3s per query/dispatch. Reconciliation plus
+        // identity, destination, move and read-back are sequential, not parallel.
+        // Leave bounded slack for journal persistence and event-loop scheduling.
+        // The helper journal accepts at most 1024 records. Recovery visits each
+        // once (four calls per record); status/reconcile needs one query only.
+        const records = operation === "recover" ? Math.min(1024, _parkedWindows.length) : 1;
+        _parkingDeadline.interval = operation === "status" ? 5000 : 5000 + 14000 * records;
+        _parkingDeadline.restart();
+    }
     function _pumpParking() {
         if (!_parkingReady || _parkingActive || !_parkingQueue.length) return;
         const next = _parkingQueue.slice();
@@ -266,7 +302,7 @@ QtObject {
             _finishParking(_parkingActive, {ok:false, status:"membership-changed", key:request.key});
             return;
         }
-        _parkingDeadline.restart();
+        _armParkingDeadline(request.op);
         _parking.write(JSON.stringify(request) + "\n");
     }
     function _retryParkingMetadata() {
@@ -283,7 +319,7 @@ QtObject {
                 _finishParking(active, {ok:false, status:"membership-changed", key:request.key});
                 return;
             }
-            _parkingDeadline.restart();
+            _armParkingDeadline(request.op);
             _parking.write(JSON.stringify(request) + "\n");
             return;
         }
@@ -301,7 +337,8 @@ QtObject {
             const key = _assignWindowKey(previous ? previous.key : "", identity, used);
             used.push(key);
             return {key: key, handle: w.handle, appId: w.appId, title: w.title, active: w.active,
-                urgent:w.urgent === true, openedAtMs:previous ? previous.openedAtMs : Date.now()};
+                urgent:w.urgent === true, openedAtMs:previous ? previous.openedAtMs : Date.now(),
+                viewable: w.viewable};
         });
     }
     property var _pending: Object.create(null)
@@ -318,7 +355,34 @@ QtObject {
             required property var requestRecord
             command: ["/usr/bin/python3", Launchers.localPath(Qt.resolvedUrl("launch_app.py").toString()), "--record", JSON.stringify(requestRecord)]
             stderr: StdioCollector { id: launchErrors }
+            // Helper lifetime is independent of window/pending feedback. Signal
+            // only this exact child: applications it spawned are not ours to kill.
+            property bool retiring: false
+            property Timer runtimeDeadline: Timer {
+                interval: root._launchTimeout
+                running: true
+                onTriggered: launcher.retire()
+            }
+            property Timer killDeadline: Timer {
+                interval: 500
+                onTriggered: if (launcher.running) launcher.signal(9)
+            }
+            function retire() {
+                if (retiring) return;
+                retiring = true;
+                runtimeDeadline.stop();
+                root._finishLaunch(requestId, false, "launcher helper timed out", requestToken);
+                if (running) {
+                    signal(15);
+                    killDeadline.start();
+                } else {
+                    if (root._launcher === launcher) root._launcher = null;
+                    destroy();
+                }
+            }
             onExited: (exitCode, exitStatus) => {
+                runtimeDeadline.stop();
+                killDeadline.stop();
                 if (root._launcher === launcher) root._launcher = null;
                 root._finishLaunch(requestId, exitCode === 0 && exitStatus === 0,
                     launchErrors.text.trim() || "launcher process failed", requestToken);
@@ -334,8 +398,8 @@ QtObject {
                     const application = root._pending[id].kind === "application";
                     delete root._pending[id];
                     root._actionError = application ? "Launch requested but no new matching window appeared: " + id : "Launcher timed out: " + id;
-                    if (root._launcher && root._launcher.requestId === id && root._launcher.running)
-                        root._launcher.running = false;
+                    if (root._launcher && root._launcher.requestId === id)
+                        root._launcher.retire();
                 }
             });
             root._refresh();
@@ -402,12 +466,12 @@ QtObject {
             root._stopStore();
         }
     }
-    function _resolveLease(message) {
+    function _resolveLease(message, unavailable) {
         if (_leaseResolved) return;
         _leaseResolved = true;
         _leaseDeadline.stop();
         _leaseError = message;
-        _finishStartup();
+        if (!unavailable) _finishStartup();
     }
     function _storeMessage(line) {
         if (_leaseDead) return;
@@ -427,9 +491,15 @@ QtObject {
                 _resolveLease("");
             } else {
                 _leaseDead = true;
+                // Only the helper can attest to the no-follow/owner-checked read.
+                // A busy snapshot is observational, never a durable write receipt.
+                const snapshot = message.error === "busy" && message.snapshot === true
+                    && typeof message.text === "string" && typeof message.missing === "boolean"
+                    && (message.missing ? message.text === "" : !Config.parse(message.text).error);
+                if (snapshot) _loadText(message.text, message.missing);
                 _resolveLease(message.error === "busy"
-                    ? "Configuration writer is active in another instance; editing and recovery disabled"
-                    : "Configuration writer helper rejected storage or reconciliation; editing and recovery disabled");
+                    ? "Configuration writer is active in another instance; " + (snapshot ? "saved configuration is read-only" : "saved configuration unavailable") + "; editing and recovery disabled"
+                    : "Configuration writer helper rejected storage or reconciliation; editing and recovery disabled", !snapshot);
                 _stopStore();
             }
             return;
@@ -495,10 +565,10 @@ QtObject {
     }
     Component.onCompleted: {
         if (!parkingJournalPath) _parkingReady = true;
-        else if (!_parkingPathAllowed) _actionError = "Parking journal path must be an absolute temporary path in test mode";
+        else if (!_parkingPathAllowed) _actionError = testMode ? "Test mode requires a parking journal inside the explicit owned fixture root" : "Parking journal path must be absolute";
         else { _parkingDeadline.start(); _parking.running = true; }
         if (!_pathAllowed) {
-            _storageError = testMode ? "Test mode requires an absolute temporary configuration path" : "Pins path must be absolute";
+            _storageError = testMode ? "Test mode requires a configuration path inside the explicit owned fixture root" : "Pins path must be absolute";
             _finishStartup();
         } else if (!configPath) _finishStartup();
         else {
@@ -521,7 +591,8 @@ QtObject {
         const focused = _windows.find(w => w.active);
         const recent = _focusOrder.filter(key => _windows.some(w => w.key === key) && (!focused || key !== focused.key));
         _focusOrder = focused ? [focused.key].concat(recent) : recent;
-        const apps = Apps.build(_entries, _windows, _pins, Array.isArray(order) ? order : _items.map(i => i.id), overrides);
+        const previousIds = (Array.isArray(order) ? order : _items.map(i => i.id)).filter(id => id !== Apps.HIDDEN_WORKSPACES_ID);
+        const apps = Apps.build(_entries, _windows, _pins, previousIds, overrides);
         const actions = Object.create(null);
         const entryIndex = Apps.indexEntries(_entries);
         apps.forEach(item => {
@@ -548,7 +619,8 @@ QtObject {
         });
         if (JSON.stringify(attention) !== JSON.stringify(attentionApps)) attentionApps = attention;
         const next = apps.filter(i => i.pinned).concat(launchers.map(Launchers.item), apps.filter(i => !i.pinned));
-        const resolved = next.map(i => {
+        const resolved = Apps.shelfItems(next.map(i => {
+            Apps.markScreenPresence(i, _windows);
             i.pending = !!_pending[i.id];
             i.launchToken = _pending[i.id] ? _pending[i.id].token : 0;
             if (i.kind === "folder" && !i.icon) {
@@ -562,7 +634,8 @@ QtObject {
                 i.icon = Quickshell.iconPath(i.icon || "application-x-executable", true)
                     || Quickshell.iconPath("application-x-executable");
             return i;
-        });
+        }), {showHiddenWorkspaceApps: settings.showHiddenWorkspaceApps === true,
+            hideVisibleApps: settings.hideVisibleApps === true});
         if (JSON.stringify(resolved) !== JSON.stringify(_items)) _items = resolved;
         _armPending();
         Object.keys(_urgentFocus).forEach(id => {
@@ -586,7 +659,7 @@ QtObject {
             const key = _assignWindowKey(old ? old.key : "", w.identity, used);
             used.push(key);
             return {fixtureKey: w.key, key: key, appId: w.appId, title: w.title, active: !!w.active,
-                identity: w.identity, origin: w.origin};
+                identity: w.identity, origin: w.origin, viewable: w.viewable};
         });
         _refresh();
         return true;
@@ -672,16 +745,17 @@ QtObject {
         return _persist(value ? _pins.concat([id]) : _pins.filter(p => p !== id));
     }
     function reorder(ids): bool {
-        const current = _items.map(i => i.id);
-        if (!Array.isArray(ids) || ids.length !== current.length
-            || ids.some((id, i) => current.indexOf(id) === -1 || ids.indexOf(id) !== i)) {
+        const current = _items.map(i => i.id).filter(id => id !== Apps.HIDDEN_WORKSPACES_ID);
+        const incoming = Array.isArray(ids) ? ids.filter(id => id !== Apps.HIDDEN_WORKSPACES_ID) : [];
+        if (!Array.isArray(ids) || incoming.length !== current.length
+            || incoming.some((id, i) => current.indexOf(id) === -1 || incoming.indexOf(id) !== i)) {
             _actionError = "Reorder requires every current app ID exactly once";
             return false;
         }
-        const pins = ids.filter(id => _pins.indexOf(id) !== -1);
-        const orderedLaunchers = ids.filter(id => launchers.some(r => r.id === id)).map(id => launchers.find(r => r.id === id));
+        const pins = incoming.filter(id => _pins.indexOf(id) !== -1);
+        const orderedLaunchers = incoming.filter(id => launchers.some(r => r.id === id)).map(id => launchers.find(r => r.id === id));
         // Ordering is stable within each group; cross-group drops snap back.
-        return _commit(Object.assign({}, _config, {pins: pins, launchers: orderedLaunchers}), false, ids);
+        return _commit(Object.assign({}, _config, {pins: pins, launchers: orderedLaunchers}), false, incoming);
     }
     // True means an activation/launch request was accepted, not compositor acknowledgement.
     function duplicateLauncher(id): bool {
@@ -737,6 +811,9 @@ QtObject {
             const matches = _windows.filter(w => item.windows.indexOf(w.key) !== -1);
             const visible = matches.filter(w => !_parkedWindows.some(r => r.key === w.key));
             const target = matches.filter(w => w.active)[0] || visible[0] || matches[0];
+            if (target && target.active && settings.minimizeMode === "off"
+                && !_parkedWindows.some(r => r.key === target.key))
+                return matches.length > 1 ? cycleWindows(id, 1) : true;
             if (_parking.running && _parkingReady) {
                 const parked = _parkedWindows.filter(r => item.windows.indexOf(r.key) !== -1);
                 if (parked.length === matches.length && parked.length) {
@@ -744,7 +821,6 @@ QtObject {
                     return restoreWindow(id, parked[0].key, "here") > 0;
                 }
                 if (target && target.active) {
-                    if (settings.minimizeMode === "off") return matches.length > 1 ? cycleWindows(id, 1) : true;
                     return minimizeApplication(id) > 0;
                 }
             }
@@ -839,8 +915,12 @@ QtObject {
         return _enqueueParking({op:"restore", appId:appId, key:key, mode:mode, urgent:urgent === true});
     }
     function _groupKeys(appId, keys) {
+        // Typed QML bridges can deliver a QVariantList, not a JS Array.
+        // Copy the sequence without coercing key values; reject strings/maps.
+        if (!keys || typeof keys !== "object" || typeof keys.slice !== "function") return [];
+        keys = keys.slice();
         if (!Array.isArray(keys) || !keys.length || keys.some((key, i) => typeof key !== "string" || keys.indexOf(key) !== i)) return [];
-        return keys.every(key => !!_windowTarget(appId, key)) ? keys.slice() : [];
+        return keys.every(key => !!_windowTarget(appId, key)) ? keys : [];
     }
     // Frozen keys only: never use global recovery as an app-group operation.
     // Each window retains its existing receipt. Focus once, only after all read-backs.

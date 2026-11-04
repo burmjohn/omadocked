@@ -124,6 +124,23 @@ TestCase {
         keyClick(Qt.Key_Tab); keyClick(Qt.Key_Tab); keyClick(Qt.Key_Return);
         compare(dock.windowChooserOpen, false, "Tab reaches Back after explicit Close");
     }
+    function test_short_output_keeps_last_window_reachable() {
+        dock.availableHeight = 400;
+        dock.windowGroups = {alpha:Array.from({length:20}, (_, i) => ({key:"short"+i, title:"Owned "+i}))};
+        verify(dock.openWindowChooser("alpha"));
+        const rect = dock.popupRect;
+        verify(rect.y + rect.height <= dock.height - dock.dockHeight);
+        const list = findChild(dock, "window-list");
+        verify(list.height >= 42, "preview must yield room to one actionable row");
+        for (let i=0; i<19; ++i) keyClick(Qt.Key_Down);
+        compare(dock.windowSelectionKey, "short19");
+        const row = findChild(dock, "window-activate-short19");
+        verify(row !== null);
+        const point = row.mapToItem(dock, 0, 0);
+        verify(point.y >= rect.y && point.y + row.height <= rect.y + rect.height);
+        mouseClick(findChild(dock, "windows-back"));
+        compare(dock.windowChooserOpen, false);
+    }
     function test_smallChooserFitsItsRowsAndStaysNearShelf() {
         dock.windowGroups = {alpha: windows()};
         verify(dock.openWindowChooser("alpha"));
